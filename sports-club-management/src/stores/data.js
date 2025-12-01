@@ -2,6 +2,46 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { supabase } from '@/lib/supabase'
 
+// Supabase Edge Function URL for push notifications
+const SUPABASE_URL = 'https://augislapwqypxsnnwbot.supabase.co'
+
+/**
+ * Send push notification via Edge Function
+ * @param {Object} payload - Push notification payload
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+async function sendPushNotification(payload) {
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) {
+      console.warn('No session for push notification')
+      return { success: false, error: 'No session' }
+    }
+
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/send-push`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`
+      },
+      body: JSON.stringify(payload)
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('Push notification failed:', errorText)
+      return { success: false, error: errorText }
+    }
+
+    const result = await response.json()
+    console.log('Push notification sent:', result)
+    return { success: true, ...result }
+  } catch (error) {
+    console.error('Error sending push notification:', error)
+    return { success: false, error: error.message }
+  }
+}
+
 export const useDataStore = defineStore('data', () => {
   const clubs = ref([])
   const coaches = ref([])
@@ -221,6 +261,23 @@ export const useDataStore = defineStore('data', () => {
     if (!err && data) {
       schedules.value.push(data)
       schedules.value.sort((a, b) => new Date(a.date) - new Date(b.date))
+      
+      // Send push notification for new schedule (Requirement 3.2)
+      const pushPayload = {
+        title: 'ตารางนัดหมายใหม่',
+        message: `${data.title || 'นัดหมาย'} - ${new Date(data.date).toLocaleDateString('th-TH')}`,
+        type: 'schedule_update',
+        referenceType: 'schedule',
+        referenceId: data.id,
+        url: '/schedules',
+        targetType: data.club_id ? 'club' : 'all',
+        clubId: data.club_id || undefined
+      }
+      
+      sendPushNotification(pushPayload).catch(err => {
+        console.error('Failed to send schedule push:', err)
+      })
+      
       return { success: true, data }
     }
     return { success: false, message: err?.message }
@@ -237,6 +294,23 @@ export const useDataStore = defineStore('data', () => {
     if (!err && data) {
       const idx = schedules.value.findIndex(s => s.id === id)
       if (idx !== -1) schedules.value[idx] = data
+      
+      // Send push notification for schedule update (Requirement 3.2)
+      const pushPayload = {
+        title: 'อัปเดตตารางนัดหมาย',
+        message: `${data.title || 'นัดหมาย'} มีการเปลี่ยนแปลง - ${new Date(data.date).toLocaleDateString('th-TH')}`,
+        type: 'schedule_update',
+        referenceType: 'schedule',
+        referenceId: data.id,
+        url: '/schedules',
+        targetType: data.club_id ? 'club' : 'all',
+        clubId: data.club_id || undefined
+      }
+      
+      sendPushNotification(pushPayload).catch(err => {
+        console.error('Failed to send schedule update push:', err)
+      })
+      
       return { success: true }
     }
     return { success: false, message: err?.message }
@@ -374,6 +448,28 @@ export const useDataStore = defineStore('data', () => {
     if (!err && data) {
       const mapped = { ...data, author: data.user_profiles }
       announcements.value.unshift(mapped)
+      
+      // Send push notification for urgent announcements (Requirement 3.1)
+      if (announcement.priority === 'urgent') {
+        const notificationType = 'announcement_urgent'
+        const pushPayload = {
+          title: `🚨 ${data.title}`,
+          message: data.content?.substring(0, 200) || data.title,
+          type: notificationType,
+          referenceType: 'announcement',
+          referenceId: data.id,
+          url: '/announcements',
+          priority: 'urgent',
+          targetType: announcement.target_type || 'all',
+          clubId: announcement.club_id || undefined
+        }
+        
+        // Send push notification asynchronously (don't block the response)
+        sendPushNotification(pushPayload).catch(err => {
+          console.error('Failed to send urgent announcement push:', err)
+        })
+      }
+      
       return { success: true, data: mapped }
     }
     return { success: false, message: err?.message }
@@ -733,6 +829,80 @@ export const useDataStore = defineStore('data', () => {
     }
   }
 
+  async function deleteNotification(notificationId) {
+    const { error: err } = await supabase
+      .from('notifications')
+      .delete()
+      .eq('id', notificationId)
+    
+    if (!err) {
+      notifications.value = notifications.value.filter(n => n.id !== notificationId)
+      return { success: true }
+    }
+    return { success: false, message: err?.message }
+  }
+
+  async function clearAllNotifications(userId) {
+    const { error: err } = await supabase
+      .from('notifications')
+      .delete()
+      .eq('user_id', userId)
+    
+    if (!err) {
+      notifications.value = []
+      return { success: true }
+    }
+    return { success: false, message: err?.message }
+  }
+
+  // Realtime subscription for notifications
+  let notificationSubscription = null
+
+  function subscribeToNotifications(userId) {
+    if (notificationSubscription) {
+      notificationSubscription.unsubscribe()
+    }
+    
+    notificationSubscription = supabase
+      .channel('notifications-channel')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'notifications',
+        filter: `user_id=eq.${userId}`
+      }, (payload) => {
+        // Add new notification to the top
+        notifications.value.unshift(payload.new)
+      })
+      .subscribe()
+  }
+
+  function unsubscribeFromNotifications() {
+    if (notificationSubscription) {
+      notificationSubscription.unsubscribe()
+      notificationSubscription = null
+    }
+  }
+
+  // Create notification helper
+  async function createNotification(userId, title, message, type = 'info', referenceType = null, referenceId = null) {
+    const { data, error: err } = await supabase
+      .from('notifications')
+      .insert({
+        user_id: userId,
+        title,
+        message,
+        type,
+        reference_type: referenceType,
+        reference_id: referenceId
+      })
+      .select()
+      .single()
+    
+    if (!err && data) return { success: true, data }
+    return { success: false, message: err?.message }
+  }
+
   // Send notification to admins/coaches when athlete registers or checks in
   async function sendEventNotification(event, athlete, actionType, checkinStatus = null) {
     // Get admins and event creator
@@ -864,6 +1034,13 @@ export const useDataStore = defineStore('data', () => {
   }
 
   async function updateParticipantStatus(id, status) {
+    // Get participant details with athlete info before update
+    const { data: participant } = await supabase
+      .from('tournament_participants')
+      .select('*, athletes(id, name, user_id), tournaments(id, name)')
+      .eq('id', id)
+      .single()
+    
     const { data, error: err } = await supabase
       .from('tournament_participants')
       .update({ registration_status: status })
@@ -874,6 +1051,28 @@ export const useDataStore = defineStore('data', () => {
     if (!err && data) {
       const idx = tournamentParticipants.value.findIndex(p => p.id === id)
       if (idx !== -1) tournamentParticipants.value[idx] = { ...tournamentParticipants.value[idx], ...data }
+      
+      // Send push notification to the affected athlete (Requirement 3.4)
+      if (participant?.athletes?.user_id) {
+        const statusText = status === 'approved' ? 'ได้รับการอนุมัติ' : 
+                          status === 'rejected' ? 'ถูกปฏิเสธ' : 
+                          status === 'pending' ? 'รอการอนุมัติ' : status
+        
+        const pushPayload = {
+          userId: participant.athletes.user_id,
+          title: 'อัปเดตสถานะการแข่งขัน',
+          message: `การลงทะเบียนรายการ "${participant.tournaments?.name || 'การแข่งขัน'}" ${statusText}`,
+          type: 'tournament_update',
+          referenceType: 'tournament',
+          referenceId: participant.tournament_id,
+          url: `/tournaments`
+        }
+        
+        sendPushNotification(pushPayload).catch(err => {
+          console.error('Failed to send tournament status push:', err)
+        })
+      }
+      
       return { success: true }
     }
     return { success: false, message: err?.message }
@@ -1190,14 +1389,32 @@ export const useDataStore = defineStore('data', () => {
       }))
       
       if (notifs.length > 0) await supabase.from('notifications').insert(notifs)
+      
+      // Send push notification to admins and coaches
+      if (recipients.size > 0) {
+        const pushPayload = {
+          userIds: Array.from(recipients),
+          title,
+          message,
+          type: 'club_application',
+          referenceType: 'club_application',
+          referenceId: application.id,
+          url: '/club-applications'
+        }
+        
+        sendPushNotification(pushPayload).catch(err => {
+          console.error('Failed to send new application push:', err)
+        })
+      }
     } else {
-      // แจ้งนักกีฬา
+      // แจ้งนักกีฬา (Requirement 3.5)
       if (application.athletes?.user_id) {
         const title = actionType === 'approved' ? 'ใบสมัครได้รับการอนุมัติ' : 'ใบสมัครถูกปฏิเสธ'
         const message = actionType === 'approved' 
           ? `ยินดีต้อนรับสู่ชมรม ${application.clubs?.name || ''}`
           : `ใบสมัครชมรม ${application.clubs?.name || ''} ถูกปฏิเสธ${application.rejection_reason ? ': ' + application.rejection_reason : ''}`
         
+        // In-app notification
         await supabase.from('notifications').insert({
           user_id: application.athletes.user_id,
           title,
@@ -1205,6 +1422,21 @@ export const useDataStore = defineStore('data', () => {
           type: actionType === 'approved' ? 'success' : 'warning',
           reference_type: 'club_application',
           reference_id: application.id
+        })
+        
+        // Push notification (Requirement 3.5)
+        const pushPayload = {
+          userId: application.athletes.user_id,
+          title,
+          message,
+          type: 'club_application',
+          referenceType: 'club_application',
+          referenceId: application.id,
+          url: '/my-applications'
+        }
+        
+        sendPushNotification(pushPayload).catch(err => {
+          console.error('Failed to send application status push:', err)
         })
       }
     }
@@ -1310,6 +1542,8 @@ export const useDataStore = defineStore('data', () => {
     
     // Notifications
     fetchNotifications, markNotificationRead, markAllNotificationsRead,
+    deleteNotification, clearAllNotifications,
+    subscribeToNotifications, unsubscribeFromNotifications, createNotification,
     
     // Utils
     initData, exportData

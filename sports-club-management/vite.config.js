@@ -7,7 +7,7 @@ export default defineConfig({
     vue(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
+      includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'sw-push.js'],
       manifest: {
         name: 'ระบบจัดการสโมสรกีฬา',
         short_name: 'SportsClub',
@@ -31,6 +31,8 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // Import custom push notification handlers into the service worker
+        importScripts: ['sw-push.js'],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/augislapwqypxsnnwbot\.supabase\.co\/rest\/v1\/.*/i,

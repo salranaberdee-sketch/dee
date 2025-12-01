@@ -1,13 +1,16 @@
 <script setup>
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useDataStore } from '@/stores/data'
 import NavBar from '@/components/NavBar.vue'
 import UrgentAnnouncementPopup from '@/components/UrgentAnnouncementPopup.vue'
 import InstallPrompt from '@/components/InstallPrompt.vue'
+import PushNotificationPrompt from '@/components/PushNotificationPrompt.vue'
 
 const route = useRoute()
 const auth = useAuthStore()
+const data = useDataStore()
 const isOffline = ref(!navigator.onLine)
 
 const showNav = computed(() => auth.isAuthenticated && route.name !== 'Login' && route.name !== 'AthleteRegistration')
@@ -15,6 +18,16 @@ const showNav = computed(() => auth.isAuthenticated && route.name !== 'Login' &&
 function updateOnlineStatus() {
   isOffline.value = !navigator.onLine
 }
+
+// Fetch notifications when user logs in
+watch(() => auth.user?.id, async (userId) => {
+  if (userId) {
+    await data.fetchNotifications(userId)
+    data.subscribeToNotifications(userId)
+  } else {
+    data.unsubscribeFromNotifications()
+  }
+}, { immediate: true })
 
 onMounted(() => {
   window.addEventListener('online', updateOnlineStatus)
@@ -24,6 +37,7 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('online', updateOnlineStatus)
   window.removeEventListener('offline', updateOnlineStatus)
+  data.unsubscribeFromNotifications()
 })
 </script>
 
@@ -32,7 +46,10 @@ onUnmounted(() => {
     <!-- Offline Banner -->
     <div v-if="isOffline" class="offline-banner">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0119 12.55"/><path d="M5 12.55a10.94 10.94 0 015.17-2.39"/><path d="M10.71 5.05A16 16 0 0122.58 9"/><path d="M1.42 9a15.91 15.91 0 014.7-2.88"/><path d="M8.53 16.11a6 6 0 016.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>
+        <line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0119 12.55"/>
+        <path d="M5 12.55a10.94 10.94 0 015.17-2.39"/><path d="M10.71 5.05A16 16 0 0122.58 9"/>
+        <path d="M1.42 9a15.91 15.91 0 014.7-2.88"/><path d="M8.53 16.11a6 6 0 016.95 0"/>
+        <line x1="12" y1="20" x2="12.01" y2="20"/>
       </svg>
       <span>ออฟไลน์ - ข้อมูลอาจไม่เป็นปัจจุบัน</span>
     </div>
@@ -43,7 +60,7 @@ onUnmounted(() => {
     </div>
     
     <template v-else>
-      <NavBar v-if="showNav" :unread="0" />
+      <NavBar v-if="showNav" :unread="data.unreadNotificationsCount" />
       <main class="main-content">
         <router-view />
       </main>
@@ -51,7 +68,10 @@ onUnmounted(() => {
       <!-- Urgent Announcement Popup -->
       <UrgentAnnouncementPopup v-if="auth.isAuthenticated" />
       
-      <!-- PWA Install Prompt - บังคับติดตั้งครั้งแรก -->
+      <!-- Push Notification Prompt (Requirement 4.1) -->
+      <PushNotificationPrompt v-if="auth.isAuthenticated" />
+      
+      <!-- PWA Install Prompt -->
       <InstallPrompt />
     </template>
   </div>

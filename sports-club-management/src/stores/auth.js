@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { supabase } from '@/lib/supabase'
+import { unsubscribeFromPush, isPushSupported } from '@/lib/pushNotification'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref(null)
@@ -106,6 +107,16 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function logout() {
+    // Remove push subscription for this device before logout (Requirement 4.2)
+    if (user.value && isPushSupported()) {
+      try {
+        await unsubscribeFromPush(user.value.id)
+      } catch (error) {
+        console.error('Error removing push subscription on logout:', error)
+        // Continue with logout even if unsubscribe fails
+      }
+    }
+    
     await supabase.auth.signOut()
     user.value = null
     profile.value = null

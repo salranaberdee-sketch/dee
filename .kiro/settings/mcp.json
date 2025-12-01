@@ -15,7 +15,12 @@
         "get_logs",
         "apply_migration",
         "get_advisors",
-        "list_tables"
+        "list_tables",
+        "search_docs",
+        "deploy_edge_function",
+        "list_edge_functions",
+        "get_edge_function",
+        "list_migrations"
       ]
     }
   }

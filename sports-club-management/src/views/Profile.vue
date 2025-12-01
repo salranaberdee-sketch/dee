@@ -391,6 +391,7 @@ function getCoachName(id) {
 
 // Menu items
 const menuItems = [
+  { icon: 'bell', label: 'ตั้งค่าการแจ้งเตือน', to: '/notification-settings', roles: ['admin', 'coach', 'athlete'] },
   { icon: 'building', label: 'จัดการชมรม', to: '/clubs', roles: ['admin'] },
   { icon: 'file-text', label: 'ใบสมัครชมรม', to: '/club-applications', roles: ['admin', 'coach'] },
   { icon: 'file-check', label: 'ใบสมัครของฉัน', to: '/my-applications', roles: ['athlete'] },
@@ -548,7 +549,8 @@ const filteredMenu = computed(() => menuItems.filter(item => item.roles.includes
           <div class="menu-list">
             <router-link v-for="item in filteredMenu" :key="item.to" :to="item.to" class="menu-row">
               <span class="menu-icon">
-                <svg v-if="item.icon === 'building'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5"/></svg>
+                <svg v-if="item.icon === 'bell'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                <svg v-else-if="item.icon === 'building'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5"/></svg>
                 <svg v-else-if="item.icon === 'file-text'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                 <svg v-else-if="item.icon === 'file-check'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15l2 2 4-4"/></svg>
                 <svg v-else-if="item.icon === 'clipboard'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
