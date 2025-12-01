@@ -1,0 +1,156 @@
+# Implementation Plan
+
+- [x] 1. Set up database schema and RLS policies
+  - [x] 1.1 Create push_subscriptions table with migration
+    - Create table with columns: id, user_id, endpoint, p256dh, auth, device_info, created_at, last_used_at
+    - Add unique constraint on (user_id, endpoint)
+    - Add foreign key to auth.users
+    - _Requirements: 1.1, 4.2_
+  - [x] 1.2 Create notification_preferences table with migration
+    - Create table with columns for each notification type toggle
+    - Add unique constraint on user_id
+    - Set default values (all enabled by default)
+    - _Requirements: 2.1, 2.4_
+  - [x] 1.3 Set up RLS policies for both tables
+    - Users can only read/write their own subscriptions
+    - Users can only read/write their own preferences
+    - Run get_advisors to verify security
+    - _Requirements: 1.1, 2.4_
+  - [x] 1.4 Write property test for subscription persistence round-trip
+    - **Property 1: Subscription persistence round-trip**
+    - **Validates: Requirements 1.1**
+  - [x] 1.5 Write property test for preference persistence round-trip
+    - **Property 5: Preference persistence round-trip**
+    - **Validates: Requirements 2.4**
+
+- [x] 2. Implement Push Notification Service
+  - [x] 2.1 Create pushNotification.js library
+    - Implement isPushSupported() function
+    - Implement getPermissionStatus() function
+    - Implement requestPermission() function
+    - _Requirements: 1.1, 1.2_
+  - [x] 2.2 Implement subscription management functions
+    - Implement subscribeToPush(userId) - register with push service and store in DB
+    - Implement unsubscribeFromPush(userId) - remove subscription from DB
+    - Implement getVapidPublicKey() - get VAPID key for subscription
+    - _Requirements: 1.1, 4.2_
+  - [ ]* 2.3 Write property test for notification delivery to subscribed devices
+    - **Property 2: Notification delivery to all subscribed devices**
+    - **Validates: Requirements 1.3**
+
+- [x] 3. Implement Notification Preferences Store
+  - [x] 3.1 Create notificationPreferences.js Pinia store
+    - Define state: preferences, subscriptions, loading
+    - Implement fetchPreferences(userId) action
+    - Implement updatePreference(type, enabled) action
+    - Implement fetchSubscriptions(userId) action
+    - _Requirements: 2.1, 2.2, 2.3, 2.4_
+  - [ ]* 3.2 Write property test for preference filtering correctness
+    - **Property 4: Preference filtering correctness**
+    - **Validates: Requirements 2.2, 2.3**
+
+- [x] 4. Checkpoint - Ensure all tests pass
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 5. Implement Service Worker Push Handlers
+  - [x] 5.1 Add push event handler to service worker
+    - Handle incoming push events
+    - Parse notification payload
+    - Display notification with title, message, icon
+    - _Requirements: 1.4, 6.4_
+  - [x] 5.2 Add notification click handler
+    - Handle notification click events
+    - Navigate to relevant content based on reference_type and reference_id
+    - Focus existing window or open new one
+    - _Requirements: 6.3_
+  - [ ]* 5.3 Write property test for notification display format
+    - **Property 3: Notification display format completeness**
+    - **Validates: Requirements 1.4**
+  - [ ]* 5.4 Write property test for notification click navigation
+    - **Property 10: Notification click navigation**
+    - **Validates: Requirements 6.3**
+
+- [x] 6. Implement Notification Settings UI
+  - [x] 6.1 Create NotificationSettings.vue component
+    - Display push notification enable/disable toggle
+    - Display permission status and request button
+    - Display subscribed device count
+    - Use black/white design theme with SVG icons
+    - _Requirements: 2.1, 4.3_
+  - [x] 6.2 Add notification type toggles
+    - Toggle for urgent announcements
+    - Toggle for normal announcements
+    - Toggle for schedule updates
+    - Toggle for event reminders
+    - Toggle for tournament updates
+    - Toggle for club application updates
+    - _Requirements: 2.1, 2.2, 2.3_
+  - [x] 6.3 Integrate settings into Profile or Settings page
+    - Add navigation to notification settings
+    - Add route if needed
+    - _Requirements: 2.1_
+
+- [x] 7. Checkpoint - Ensure all tests pass
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 8. Create Supabase Edge Function for sending push notifications
+  - [x] 8.1 Create send-push Edge Function
+    - Set up function structure with Deno
+    - Implement web-push library integration
+    - Configure VAPID keys
+    - _Requirements: 1.3_
+  - [x] 8.2 Implement notification filtering logic
+    - Filter by user preferences
+    - Filter by target_type (all, club, coaches, athletes)
+    - Get active subscriptions for user
+    - _Requirements: 2.2, 5.1, 5.2, 5.3, 5.4_
+  - [x] 8.3 Implement subscription cleanup on send failure
+    - Handle 410 Gone response - remove invalid subscription
+    - Handle other errors with logging
+    - _Requirements: 4.4_
+  - [ ]* 8.4 Write property test for target type filtering
+    - **Property 6: Target type filtering correctness**
+    - **Validates: Requirements 5.1, 5.2, 5.3, 5.4**
+  - [ ]* 8.5 Write property test for invalid subscription cleanup
+    - **Property 9: Invalid subscription cleanup**
+    - **Validates: Requirements 4.4**
+
+- [x] 9. Integrate push notifications with existing events
+  - [x] 9.1 Add push notification trigger for urgent announcements
+    - Modify addAnnouncement in data store
+    - Call Edge Function when priority is "urgent"
+    - _Requirements: 3.1_
+  - [x] 9.2 Add push notification trigger for schedule updates
+    - Modify addSchedule and updateSchedule in data store
+    - Notify affected athletes and coaches
+    - _Requirements: 3.2_
+  - [x] 9.3 Add push notification trigger for tournament status changes
+    - Modify updateParticipantStatus in data store
+    - Notify the affected athlete
+    - _Requirements: 3.4_
+  - [x] 9.4 Add push notification trigger for club application status changes
+    - Modify club application approval/rejection flow
+    - Notify the applicant
+    - _Requirements: 3.5_
+  - [ ]* 9.5 Write property test for status change notification delivery
+    - **Property 7: Status change notification delivery**
+    - **Validates: Requirements 3.4, 3.5**
+
+- [x] 10. Implement logout subscription cleanup
+  - [x] 10.1 Add subscription removal on logout
+    - Modify logout flow in auth store
+    - Call unsubscribeFromPush before clearing session
+    - _Requirements: 4.2_
+  - [ ]* 10.2 Write property test for logout subscription cleanup
+    - **Property 8: Logout subscription cleanup**
+    - **Validates: Requirements 4.2**
+
+- [x] 11. Add new device notification prompt
+  - [x] 11.1 Create push notification prompt on login
+    - Check if current device is subscribed
+    - Show prompt to enable notifications if not subscribed
+    - Store user's choice to not show again
+    - _Requirements: 4.1_
+
+- [x] 12. Final Checkpoint - Ensure all tests pass
+  - Ensure all tests pass, ask the user if questions arise.
