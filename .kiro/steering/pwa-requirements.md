@@ -1,5 +1,18 @@
 # ข้อกำหนด PWA (Progressive Web App)
 
+## ⚠️ สถานะการบังคับติดตั้ง
+
+```
+DISABLE_INSTALL_PROMPT = true  (ปิดอยู่ - สำหรับทดสอบ)
+```
+
+เมื่อต้องการเปิดใช้งาน:
+1. แก้ไขไฟล์ `sports-club-management/src/components/InstallPrompt.vue`
+2. เปลี่ยน `DISABLE_INSTALL_PROMPT = false`
+3. Commit และ Deploy
+
+---
+
 ## กฎสำคัญ
 
 **ทุกฟีเจอร์ที่พัฒนาต้องรองรับ PWA:**
