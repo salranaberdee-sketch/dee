@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import NavBar from '@/components/NavBar.vue'
 import UrgentAnnouncementPopup from '@/components/UrgentAnnouncementPopup.vue'
+import InstallPrompt from '@/components/InstallPrompt.vue'
 
 const route = useRoute()
 const auth = useAuthStore()
@@ -49,6 +50,9 @@ onUnmounted(() => {
       
       <!-- Urgent Announcement Popup -->
       <UrgentAnnouncementPopup v-if="auth.isAuthenticated" />
+      
+      <!-- PWA Install Prompt - บังคับติดตั้งครั้งแรก -->
+      <InstallPrompt />
     </template>
   </div>
 </template>
