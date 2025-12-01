@@ -1,6 +1,9 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 
+// ปิดการบังคับติดตั้งชั่วคราว - เปิดใช้งานโดยเปลี่ยนเป็น false
+const DISABLE_INSTALL_PROMPT = true
+
 const showPrompt = ref(false)
 const deferredPrompt = ref(null)
 const isInstalled = ref(false)
@@ -21,6 +24,12 @@ function checkIsIOS() {
 }
 
 onMounted(() => {
+  // ปิดการบังคับติดตั้งชั่วคราว
+  if (DISABLE_INSTALL_PROMPT) {
+    showPrompt.value = false
+    return
+  }
+
   isInstalled.value = checkIfInstalled()
   isIOS.value = checkIsIOS()
   
