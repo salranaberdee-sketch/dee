@@ -1,20 +1,26 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDataStore } from '@/stores/data'
+import { useAuthStore } from '@/stores/auth'
+import { supabase } from '@/lib/supabase'
 
 const router = useRouter()
 const data = useDataStore()
+const auth = useAuthStore()
 
 const currentStep = ref(1)
-const totalSteps = 4
+const totalSteps = 5
 const isSubmitting = ref(false)
 const submitSuccess = ref(false)
+const submitError = ref('')
 
 const form = ref({
   name: '', phone: '', emergencyPhone: '', bloodType: '', birthDate: '', email: '', address: '',
   parentName: '', parentPhone: '', parentRelation: '',
   clubId: null, coachId: null,
+  password: '', confirmPassword: '',
+  applicationNotes: '',
 })
 
 const documents = ref({
@@ -22,11 +28,17 @@ const documents = ref({
 })
 
 const steps = [
-  { num: 1, title: 'ข้อมูลส่วนตัว' },
-  { num: 2, title: 'ผู้ปกครอง' },
-  { num: 3, title: 'เลือกชมรม' },
-  { num: 4, title: 'เอกสาร' },
+  { num: 1, title: 'บัญชีผู้ใช้' },
+  { num: 2, title: 'ข้อมูลส่วนตัว' },
+  { num: 3, title: 'ผู้ปกครอง' },
+  { num: 4, title: 'เลือกชมรม' },
+  { num: 5, title: 'เอกสาร' },
 ]
+
+onMounted(async () => {
+  await data.fetchClubs()
+  await data.fetchCoaches()
+})
 
 const bloodTypes = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
 const relations = ['บิดา', 'มารดา', 'ปู่', 'ย่า', 'ตา', 'ยาย', 'ลุง', 'ป้า', 'อื่นๆ']
@@ -42,10 +54,11 @@ const docList = [
 const availableCoaches = computed(() => form.value.clubId ? data.getCoachesByClub(form.value.clubId) : [])
 
 const canProceed = computed(() => {
-  if (currentStep.value === 1) return form.value.name && form.value.phone && form.value.emergencyPhone && form.value.bloodType && form.value.birthDate
-  if (currentStep.value === 2) return form.value.parentName && form.value.parentPhone && form.value.parentRelation
-  if (currentStep.value === 3) return form.value.clubId && form.value.coachId
-  if (currentStep.value === 4) return documents.value.idCard && documents.value.parentIdCard && documents.value.houseRegistration && documents.value.birthCertificate
+  if (currentStep.value === 1) return form.value.email && form.value.password && form.value.password.length >= 6 && form.value.password === form.value.confirmPassword
+  if (currentStep.value === 2) return form.value.name && form.value.phone && form.value.emergencyPhone && form.value.bloodType && form.value.birthDate
+  if (currentStep.value === 3) return form.value.parentName && form.value.parentPhone && form.value.parentRelation
+  if (currentStep.value === 4) return form.value.clubId && form.value.coachId
+  if (currentStep.value === 5) return documents.value.idCard && documents.value.parentIdCard && documents.value.houseRegistration && documents.value.birthCertificate
   return false
 })
 
@@ -65,10 +78,74 @@ function removeFile(key) { documents.value[key] = null }
 
 async function submit() {
   isSubmitting.value = true
-  await new Promise(r => setTimeout(r, 1500))
-  data.addAthlete({ ...form.value, registrationStatus: 'pending' })
-  isSubmitting.value = false
-  submitSuccess.value = true
+  submitError.value = ''
+  
+  try {
+    // 1. สร้าง user account
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email: form.value.email,
+      password: form.value.password
+    })
+    
+    if (authError) throw new Error(authError.message)
+    if (!authData.user) throw new Error('ไม่สามารถสร้างบัญชีได้')
+    
+    const userId = authData.user.id
+    
+    // 2. สร้าง user profile
+    await supabase.from('user_profiles').insert({
+      id: userId,
+      email: form.value.email,
+      name: form.value.name,
+      role: 'athlete',
+      phone: form.value.phone,
+      club_id: null // ยังไม่เข้าชมรม รอการอนุมัติ
+    })
+    
+    // 3. สร้าง athlete record (ยังไม่มี club_id)
+    const { data: athleteData, error: athleteError } = await supabase
+      .from('athletes')
+      .insert({
+        name: form.value.name,
+        email: form.value.email,
+        phone: form.value.phone,
+        emergency_phone: form.value.emergencyPhone,
+        blood_type: form.value.bloodType,
+        birth_date: form.value.birthDate,
+        address: form.value.address,
+        parent_name: form.value.parentName,
+        parent_phone: form.value.parentPhone,
+        parent_relation: form.value.parentRelation,
+        user_id: userId,
+        club_id: null, // รอการอนุมัติ
+        coach_id: null, // รอการอนุมัติ
+        registration_status: 'pending'
+      })
+      .select()
+      .single()
+    
+    if (athleteError) throw new Error(athleteError.message)
+    
+    // 4. สร้างใบสมัครชมรม
+    const { error: appError } = await supabase
+      .from('club_applications')
+      .insert({
+        athlete_id: athleteData.id,
+        club_id: form.value.clubId,
+        notes: form.value.applicationNotes || null,
+        status: 'pending'
+      })
+    
+    if (appError) throw new Error(appError.message)
+    
+    // TODO: อัปโหลดเอกสาร (ถ้าต้องการ)
+    
+    submitSuccess.value = true
+  } catch (err) {
+    submitError.value = err.message || 'เกิดข้อผิดพลาด กรุณาลองใหม่'
+  } finally {
+    isSubmitting.value = false
+  }
 }
 
 function getClubName(id) { return data.getClubById(id)?.name || '' }
@@ -107,7 +184,19 @@ function getCoachName(id) { return data.getCoachById(id)?.name || '' }
       </nav>
 
       <main class="content">
+        <!-- Step 1: บัญชีผู้ใช้ -->
         <section v-if="currentStep === 1" class="card">
+          <div class="card-head"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></div><div><h3>สร้างบัญชีผู้ใช้</h3><p>กรอกอีเมลและรหัสผ่านสำหรับเข้าสู่ระบบ</p></div></div>
+          <div class="fields">
+            <div class="field full"><label>อีเมล <i>*</i></label><input v-model="form.email" type="email" placeholder="email@example.com" /></div>
+            <div class="field full"><label>รหัสผ่าน <i>*</i></label><input v-model="form.password" type="password" placeholder="อย่างน้อย 6 ตัวอักษร" /></div>
+            <div class="field full"><label>ยืนยันรหัสผ่าน <i>*</i></label><input v-model="form.confirmPassword" type="password" placeholder="กรอกรหัสผ่านอีกครั้ง" /></div>
+            <div v-if="form.password && form.confirmPassword && form.password !== form.confirmPassword" class="field full error-text">รหัสผ่านไม่ตรงกัน</div>
+          </div>
+        </section>
+
+        <!-- Step 2: ข้อมูลส่วนตัว -->
+        <section v-if="currentStep === 2" class="card">
           <div class="card-head"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div><div><h3>ข้อมูลส่วนตัว</h3><p>กรอกข้อมูลพื้นฐานของนักกีฬา</p></div></div>
           <div class="fields">
             <div class="field full"><label>ชื่อ-นามสกุล <i>*</i></label><input v-model="form.name" placeholder="ชื่อ นามสกุล" /></div>
@@ -115,12 +204,12 @@ function getCoachName(id) { return data.getCoachById(id)?.name || '' }
             <div class="field"><label>เบอร์ฉุกเฉิน <i>*</i></label><input v-model="form.emergencyPhone" type="tel" placeholder="0898765432" /></div>
             <div class="field"><label>กรุ๊ปเลือด <i>*</i></label><select v-model="form.bloodType"><option value="">เลือก</option><option v-for="b in bloodTypes" :key="b">{{ b }}</option></select></div>
             <div class="field"><label>วันเกิด <i>*</i></label><input v-model="form.birthDate" type="date" /></div>
-            <div class="field full"><label>อีเมล</label><input v-model="form.email" type="email" placeholder="email@example.com" /></div>
             <div class="field full"><label>ที่อยู่</label><textarea v-model="form.address" rows="2" placeholder="ที่อยู่ปัจจุบัน"></textarea></div>
           </div>
         </section>
 
-        <section v-if="currentStep === 2" class="card">
+        <!-- Step 3: ผู้ปกครอง -->
+        <section v-if="currentStep === 3" class="card">
           <div class="card-head"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75"/></svg></div><div><h3>ข้อมูลผู้ปกครอง</h3><p>กรอกข้อมูลผู้ปกครองหรือผู้ดูแล</p></div></div>
           <div class="fields">
             <div class="field full"><label>ชื่อผู้ปกครอง <i>*</i></label><input v-model="form.parentName" placeholder="ชื่อ นามสกุล" /></div>
@@ -129,19 +218,26 @@ function getCoachName(id) { return data.getCoachById(id)?.name || '' }
           </div>
         </section>
 
-        <section v-if="currentStep === 3" class="card">
+        <!-- Step 4: เลือกชมรม -->
+        <section v-if="currentStep === 4" class="card">
           <div class="card-head"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5"/></svg></div><div><h3>เลือกชมรม</h3><p>เลือกชมรมและโค้ชที่ต้องการสมัคร</p></div></div>
           <div class="fields">
             <div class="field full"><label>ชมรม <i>*</i></label><select v-model="form.clubId" @change="form.coachId = null"><option :value="null">เลือกชมรม</option><option v-for="c in data.clubs" :key="c.id" :value="c.id">{{ c.name }} — {{ c.sport }}</option></select></div>
             <div class="field full"><label>โค้ช <i>*</i></label><select v-model="form.coachId" :disabled="!form.clubId"><option :value="null">{{ form.clubId ? 'เลือกโค้ช' : 'เลือกชมรมก่อน' }}</option><option v-for="c in availableCoaches" :key="c.id" :value="c.id">{{ c.name }}</option></select></div>
+            <div class="field full"><label>หมายเหตุ (ถ้ามี)</label><textarea v-model="form.applicationNotes" rows="2" placeholder="ข้อความถึงชมรม เช่น ประสบการณ์กีฬา"></textarea></div>
           </div>
           <div v-if="form.clubId && form.coachId" class="selected-info">
             <div class="info-item"><b>{{ getClubName(form.clubId) }}</b></div>
             <div class="info-item"><b>{{ getCoachName(form.coachId) }}</b></div>
           </div>
+          <div class="notice">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <span>หลังจากส่งใบสมัคร คุณจะต้องรอการอนุมัติจากโค้ชหรือผู้ดูแลระบบก่อนจึงจะเข้าชมรมได้</span>
+          </div>
         </section>
 
-        <section v-if="currentStep === 4" class="card">
+        <!-- Step 5: เอกสาร -->
+        <section v-if="currentStep === 5" class="card">
           <div class="card-head"><div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><div><h3>อัปโหลดเอกสาร</h3><p>อัปโหลดเอกสารประกอบ ({{ uploadedCount }}/5)</p></div></div>
           <div class="doc-list">
             <div v-for="doc in docList" :key="doc.key" class="doc-item">
@@ -151,6 +247,8 @@ function getCoachName(id) { return data.getCoachById(id)?.name || '' }
             </div>
           </div>
         </section>
+
+        <div v-if="submitError" class="error-box">{{ submitError }}</div>
 
         <div class="nav">
           <button v-if="currentStep > 1" class="btn btn-secondary" @click="prevStep">← ย้อนกลับ</button>
@@ -219,5 +317,9 @@ function getCoachName(id) { return data.getCoachById(id)?.name || '' }
 .summary div { display: flex; justify-content: space-between; padding: 8px 0; }
 .summary span { color: #737373; font-size: 14px; }
 .summary b { font-size: 14px; }
+.error-text { color: #DC2626; font-size: 13px; }
+.error-box { background: #FEE2E2; color: #991B1B; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; }
+.notice { display: flex; gap: 10px; padding: 14px; background: #FEF3C7; border-radius: 10px; margin-top: 20px; font-size: 13px; color: #92400E; }
+.notice svg { width: 20px; height: 20px; flex-shrink: 0; }
 @media (max-width: 480px) { .fields { grid-template-columns: 1fr; } .field.full { grid-column: span 1; } }
 </style>

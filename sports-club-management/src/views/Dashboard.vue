@@ -10,8 +10,13 @@ const data = useDataStore()
 
 const roleLabel = { admin: 'ผู้ดูแลระบบ', coach: 'โค้ช', athlete: 'นักกีฬา' }
 
-onMounted(() => {
-  data.initData()
+onMounted(async () => {
+  await data.initData()
+  // โหลดใบสมัครสำหรับ Admin/Coach
+  if (auth.isAdmin || auth.isCoach) {
+    const filters = auth.isCoach && auth.profile?.club_id ? { clubId: auth.profile.club_id } : {}
+    await data.fetchClubApplications(filters)
+  }
 })
 
 const upcomingSchedules = computed(() => {
@@ -30,6 +35,9 @@ const userRole = computed(() => auth.profile?.role || 'athlete')
 
 // Latest announcements
 const latestAnnouncements = computed(() => data.announcements.slice(0, 2))
+
+// Pending applications count
+const pendingApplications = computed(() => data.pendingApplicationsCount)
 
 // Quick actions based on role
 const quickActions = computed(() => {
@@ -76,6 +84,25 @@ const quickActions = computed(() => {
           <span class="today-title">{{ todaySchedule.title }}</span>
           <span class="today-time">{{ todaySchedule.time }} · {{ todaySchedule.location }}</span>
         </div>
+      </div>
+
+      <!-- Pending Applications Alert -->
+      <div v-if="(auth.isAdmin || auth.isCoach) && pendingApplications > 0" class="pending-alert" @click="router.push('/club-applications')">
+        <div class="pending-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="12" y1="18" x2="12" y2="12"/>
+            <line x1="9" y1="15" x2="15" y2="15"/>
+          </svg>
+        </div>
+        <div class="pending-content">
+          <span class="pending-label">ใบสมัครรออนุมัติ</span>
+          <span class="pending-count">{{ pendingApplications }} รายการ</span>
+        </div>
+        <svg class="pending-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
       </div>
 
       <!-- Admin Stats -->
@@ -192,6 +219,23 @@ const quickActions = computed(() => {
 .today-label { display: block; font-size: 11px; opacity: 0.8; text-transform: uppercase; letter-spacing: 0.05em; }
 .today-title { display: block; font-size: 16px; font-weight: 600; margin: 2px 0; }
 .today-time { display: block; font-size: 13px; opacity: 0.9; }
+
+.pending-alert { 
+  display: flex; align-items: center; gap: 12px;
+  background: #FEF3C7; border: 1px solid #F59E0B;
+  padding: 14px 16px; border-radius: var(--radius-lg);
+  margin-bottom: 16px; cursor: pointer;
+}
+.pending-alert:active { opacity: 0.95; }
+.pending-icon { 
+  width: 40px; height: 40px; background: #F59E0B; border-radius: 10px; 
+  display: flex; align-items: center; justify-content: center; 
+}
+.pending-icon svg { width: 20px; height: 20px; color: white; }
+.pending-content { flex: 1; }
+.pending-label { display: block; font-size: 12px; color: #92400E; font-weight: 500; }
+.pending-count { display: block; font-size: 16px; font-weight: 700; color: #78350F; }
+.pending-arrow { width: 20px; height: 20px; color: #92400E; }
 
 .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 20px; }
 .stat-item { 
