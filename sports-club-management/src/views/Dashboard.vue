@@ -1,0 +1,242 @@
+<script setup>
+import { computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+import { useDataStore } from '@/stores/data'
+
+const router = useRouter()
+const auth = useAuthStore()
+const data = useDataStore()
+
+const roleLabel = { admin: 'ผู้ดูแลระบบ', coach: 'โค้ช', athlete: 'นักกีฬา' }
+
+onMounted(() => {
+  data.initData()
+})
+
+const upcomingSchedules = computed(() => {
+  return data.upcomingSchedules.slice(0, 4)
+})
+
+const recentLogs = computed(() => data.trainingLogs.slice(0, 3))
+
+const todaySchedule = computed(() => {
+  const today = new Date().toISOString().split('T')[0]
+  return data.schedules.find(s => s.date === today)
+})
+
+const userName = computed(() => auth.profile?.name || 'ผู้ใช้')
+const userRole = computed(() => auth.profile?.role || 'athlete')
+
+// Latest announcements
+const latestAnnouncements = computed(() => data.announcements.slice(0, 2))
+
+// Quick actions based on role
+const quickActions = computed(() => {
+  if (auth.isAdmin) {
+    return [
+      { icon: 'building', label: 'ชมรม', to: '/clubs' },
+      { icon: 'medal', label: 'โค้ช', to: '/coaches' },
+      { icon: 'users', label: 'นักกีฬา', to: '/athletes' },
+      { icon: 'megaphone', label: 'ประกาศ', to: '/announcements' },
+    ]
+  }
+  if (auth.isCoach) {
+    return [
+      { icon: 'users', label: 'นักกีฬา', to: '/athletes' },
+      { icon: 'calendar', label: 'นัดหมาย', to: '/schedules' },
+      { icon: 'megaphone', label: 'ประกาศ', to: '/announcements' },
+    ]
+  }
+  return [
+    { icon: 'calendar', label: 'นัดหมาย', to: '/schedules' },
+    { icon: 'megaphone', label: 'ประกาศ', to: '/announcements' },
+  ]
+})
+</script>
+
+<template>
+  <div>
+    <div class="page-header">
+      <div>
+        <p class="greeting">สวัสดี, {{ userName }}</p>
+        <span :class="['badge', `badge-${userRole}`]">{{ roleLabel[userRole] }}</span>
+      </div>
+      <div class="avatar">{{ userName.charAt(0) }}</div>
+    </div>
+
+    <div class="container">
+      <!-- Today Alert -->
+      <div v-if="todaySchedule" class="today-alert" @click="router.push('/schedules')">
+        <div class="today-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        </div>
+        <div class="today-content">
+          <span class="today-label">วันนี้</span>
+          <span class="today-title">{{ todaySchedule.title }}</span>
+          <span class="today-time">{{ todaySchedule.time }} · {{ todaySchedule.location }}</span>
+        </div>
+      </div>
+
+      <!-- Admin Stats -->
+      <div v-if="auth.isAdmin" class="stats-row">
+        <div class="stat-item" @click="router.push('/clubs')">
+          <span class="stat-num">{{ data.stats.totalClubs }}</span>
+          <span class="stat-text">ชมรม</span>
+        </div>
+        <div class="stat-item" @click="router.push('/coaches')">
+          <span class="stat-num">{{ data.stats.totalCoaches }}</span>
+          <span class="stat-text">โค้ช</span>
+        </div>
+        <div class="stat-item" @click="router.push('/athletes')">
+          <span class="stat-num">{{ data.stats.totalAthletes }}</span>
+          <span class="stat-text">นักกีฬา</span>
+        </div>
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="quick-grid">
+        <button v-for="action in quickActions" :key="action.label" class="quick-btn" @click="router.push(action.to)">
+          <span class="quick-icon">
+            <svg v-if="action.icon === 'building'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5"/></svg>
+            <svg v-else-if="action.icon === 'medal'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>
+            <svg v-else-if="action.icon === 'users'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75"/></svg>
+            <svg v-else-if="action.icon === 'database'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+            <svg v-else-if="action.icon === 'calendar'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+            <svg v-else-if="action.icon === 'clipboard'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
+            <svg v-else-if="action.icon === 'megaphone'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 4H5a2 2 0 00-2 2v14l4-4h12a2 2 0 002-2V6a2 2 0 00-2-2z"/></svg>
+          </span>
+          <span class="quick-label">{{ action.label }}</span>
+        </button>
+      </div>
+
+      <!-- Schedules -->
+      <div class="section-header">
+        <span class="section-title">นัดหมายถัดไป</span>
+        <router-link to="/schedules" class="section-link">ดูทั้งหมด</router-link>
+      </div>
+      
+      <div v-if="upcomingSchedules.length === 0" class="empty-card">ไม่มีนัดหมาย</div>
+      <div v-else class="list-group">
+        <div v-for="s in upcomingSchedules" :key="s.id" class="list-item" @click="router.push('/schedules')">
+          <div class="date-box">
+            <span class="date-box-day">{{ new Date(s.date).getDate() }}</span>
+            <span class="date-box-month">{{ new Date(s.date).toLocaleDateString('th-TH', { month: 'short' }) }}</span>
+          </div>
+          <div class="list-item-content">
+            <div class="list-item-title">{{ s.title }}</div>
+            <div class="list-item-subtitle">{{ s.time }} · {{ s.location }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Latest Announcements -->
+      <div class="section-header">
+        <span class="section-title">ประกาศล่าสุด</span>
+        <router-link to="/announcements" class="section-link">ดูทั้งหมด</router-link>
+      </div>
+      
+      <div v-if="latestAnnouncements.length === 0" class="empty-card">ยังไม่มีประกาศ</div>
+      <div v-else class="list-group">
+        <div v-for="ann in latestAnnouncements" :key="ann.id" class="list-item" @click="router.push('/announcements')">
+          <div class="announcement-icon-sm">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 4H5a2 2 0 00-2 2v14l4-4h12a2 2 0 002-2V6a2 2 0 00-2-2z"/></svg>
+          </div>
+          <div class="list-item-content">
+            <div class="list-item-title">{{ ann.title }}</div>
+            <div class="list-item-subtitle">{{ ann.content.substring(0, 50) }}{{ ann.content.length > 50 ? '...' : '' }}</div>
+          </div>
+          <span v-if="ann.is_pinned" class="pin-indicator">ปักหมุด</span>
+        </div>
+      </div>
+
+      <!-- Recent Logs -->
+      <div class="section-header">
+        <span class="section-title">บันทึกล่าสุด</span>
+        <router-link to="/training-logs" class="section-link">ดูทั้งหมด</router-link>
+      </div>
+      
+      <div v-if="recentLogs.length === 0" class="empty-card">ยังไม่มีบันทึก</div>
+      <div v-else class="list-group">
+        <div v-for="log in recentLogs" :key="log.id" class="list-item" @click="router.push('/training-logs')">
+          <div class="date-box date-box-success">
+            <span class="date-box-day">{{ new Date(log.date).getDate() }}</span>
+            <span class="date-box-month">{{ new Date(log.date).toLocaleDateString('th-TH', { month: 'short' }) }}</span>
+          </div>
+          <div class="list-item-content">
+            <div class="list-item-title">{{ log.activities }}</div>
+            <div class="list-item-subtitle">{{ log.duration }} นาที</div>
+          </div>
+          <div class="rating">
+            <span v-for="i in 5" :key="i" :class="['star', { filled: i <= log.rating }]">★</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.greeting { font-size: 14px; color: var(--gray-500); margin-bottom: 4px; }
+
+.today-alert { 
+  display: flex; align-items: center; gap: 12px;
+  background: var(--gray-900);
+  color: white; padding: 16px; border-radius: var(--radius-lg);
+  margin-bottom: 20px; cursor: pointer;
+}
+.today-alert:active { opacity: 0.95; }
+.today-icon { width: 40px; height: 40px; background: rgba(255,255,255,0.2); border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+.today-icon svg { width: 22px; height: 22px; }
+.today-content { flex: 1; }
+.today-label { display: block; font-size: 11px; opacity: 0.8; text-transform: uppercase; letter-spacing: 0.05em; }
+.today-title { display: block; font-size: 16px; font-weight: 600; margin: 2px 0; }
+.today-time { display: block; font-size: 13px; opacity: 0.9; }
+
+.stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 20px; }
+.stat-item { 
+  background: var(--white); border-radius: var(--radius-md);
+  padding: 14px 8px; text-align: center; cursor: pointer;
+  border: 1px solid var(--gray-100); transition: all 0.15s;
+}
+.stat-item:active { background: var(--gray-50); }
+.stat-num { display: block; font-size: 22px; font-weight: 700; color: var(--gray-900); }
+.stat-text { font-size: 10px; color: var(--gray-500); text-transform: uppercase; }
+
+.quick-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 24px; }
+.quick-btn { 
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 16px 8px; background: var(--white); 
+  border: 1px solid var(--gray-100); border-radius: var(--radius-lg);
+  cursor: pointer; transition: all 0.15s;
+}
+.quick-btn:active { background: var(--gray-50); transform: scale(0.98); }
+.quick-icon { width: 40px; height: 40px; background: var(--gray-900); border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+.quick-icon svg { width: 20px; height: 20px; color: var(--white); }
+.quick-label { font-size: 11px; color: var(--gray-600); font-weight: 500; }
+
+.empty-card { 
+  background: var(--white); border-radius: var(--radius-lg);
+  padding: 32px; text-align: center; color: var(--gray-400);
+  border: 1px solid var(--gray-100); font-size: 14px;
+}
+
+.announcement-icon-sm {
+  width: 40px; height: 40px;
+  background: var(--gray-900);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.announcement-icon-sm svg {
+  width: 20px; height: 20px; color: var(--white);
+}
+
+.pin-indicator {
+  font-size: 10px;
+  background: var(--gray-100);
+  color: var(--gray-600);
+  padding: 4px 8px;
+  border-radius: 100px;
+}
+</style>
