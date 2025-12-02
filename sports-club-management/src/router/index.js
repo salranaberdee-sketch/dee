@@ -16,11 +16,16 @@ const routes = [
   { path: '/coaches', name: 'Coaches', component: () => import('@/views/Coaches.vue'), meta: { requiresAuth: true, roles: ['admin'] } },
   { path: '/athletes', name: 'Athletes', component: () => import('@/views/Athletes.vue'), meta: { requiresAuth: true, roles: ['admin', 'coach'] } },
   { path: '/club-applications', name: 'ClubApplications', component: () => import('@/views/ClubApplications.vue'), meta: { requiresAuth: true, roles: ['admin', 'coach'] } },
+  { path: '/evaluation', name: 'EvaluationDashboard', component: () => import('@/views/EvaluationDashboard.vue'), meta: { requiresAuth: true, roles: ['admin', 'coach'] } },
+  { path: '/evaluation/athlete/:id', name: 'AthletePerformance', component: () => import('@/views/AthletePerformance.vue'), meta: { requiresAuth: true } },
+  { path: '/attendance', name: 'AttendanceManager', component: () => import('@/views/AttendanceManager.vue'), meta: { requiresAuth: true, roles: ['admin', 'coach'] } },
   { path: '/tournaments', name: 'Tournaments', component: () => import('@/views/Tournaments.vue'), meta: { requiresAuth: true } },
   { path: '/tournament-history', name: 'TournamentHistory', component: () => import('@/views/TournamentHistory.vue'), meta: { requiresAuth: true, roles: ['admin'] } },
   
   // Athlete only
   { path: '/my-applications', name: 'MyApplications', component: () => import('@/views/MyApplications.vue'), meta: { requiresAuth: true, roles: ['athlete'] } },
+  { path: '/leave-request', name: 'LeaveRequest', component: () => import('@/views/LeaveRequest.vue'), meta: { requiresAuth: true, roles: ['athlete'] } },
+  { path: '/my-performance', name: 'MyPerformance', component: () => import('@/views/AthletePerformance.vue'), meta: { requiresAuth: true, roles: ['athlete'] } },
   
   // All users
   { path: '/events', name: 'Events', component: () => import('@/views/Events.vue'), meta: { requiresAuth: true } },

@@ -1,0 +1,357 @@
+import { defineStore } from 'pinia'
+import { ref, computed } from 'vue'
+import { supabase } from '../lib/supabase'
+import { useAuthStore } from './auth'
+
+export const useEvaluationStore = defineStore('evaluation', () => {
+  // State
+  const attendanceRecords = ref([])
+  const evaluations = ref([])
+  const athleteStats = ref([])
+  const loading = ref(false)
+  const error = ref(null)
+  const selectedMonth = ref(new Date().toISOString().slice(0, 7)) // YYYY-MM
+
+  // Getters
+  const athletesByTier = computed(() => {
+    const grouped = { excellent: [], good: [], average: [], needs_improvement: [] }
+    athleteStats.value.forEach(athlete => {
+      const tier = athlete.performance_tier || 'needs_improvement'
+      if (grouped[tier]) grouped[tier].push(athlete)
+    })
+    return grouped
+  })
+
+  const topPerformers = computed(() => {
+    return [...athleteStats.value]
+      .sort((a, b) => (b.overall_score || 0) - (a.overall_score || 0))
+      .slice(0, 10)
+  })
+
+  const needsAttention = computed(() => {
+    return athleteStats.value.filter(a => 
+      a.performance_tier === 'needs_improvement' || a.attendance_rate < 50
+    )
+  })
+
+  const attendanceSummary = computed(() => {
+    const total = attendanceRecords.value.length
+    if (total === 0) return { on_time: 0, late: 0, leave: 0, absent: 0 }
+    
+    const counts = { on_time: 0, late: 0, leave: 0, absent: 0 }
+    attendanceRecords.value.forEach(r => {
+      if (counts[r.status] !== undefined) counts[r.status]++
+    })
+    return counts
+  })
+
+  // Actions
+  async function fetchAttendanceRecords(clubId, startDate, endDate) {
+    loading.value = true
+    error.value = null
+    try {
+      let query = supabase
+        .from('attendance_records')
+        .select(`
+          *,
+          athlete:athletes(id, name, email),
+          schedule:schedules(id, title),
+          event:events(id, title)
+        `)
+        .gte('record_date', startDate)
+        .lte('record_date', endDate)
+        .order('record_date', { ascending: false })
+
+      if (clubId) query = query.eq('club_id', clubId)
+
+      const { data, error: err } = await query
+      if (err) throw err
+      attendanceRecords.value = data || []
+    } catch (err) {
+      error.value = err.message
+      console.error('Error fetching attendance:', err)
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function recordAttendance(records) {
+    loading.value = true
+    error.value = null
+    try {
+      const authStore = useAuthStore()
+      const recordsWithMeta = records.map(r => ({
+        ...r,
+        recorded_by: authStore.user?.id,
+        club_id: r.club_id || authStore.profile?.club_id
+      }))
+
+      const { data, error: err } = await supabase
+        .from('attendance_records')
+        .upsert(recordsWithMeta, { 
+          onConflict: 'athlete_id,record_date,schedule_id',
+          ignoreDuplicates: false 
+        })
+        .select()
+
+      if (err) throw err
+      return { success: true, data }
+    } catch (err) {
+      error.value = err.message
+      console.error('Error recording attendance:', err)
+      return { success: false, error: err.message }
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function submitLeaveRequest(athleteId, data) {
+    loading.value = true
+    error.value = null
+    try {
+      const authStore = useAuthStore()
+      const athlete = await supabase
+        .from('athletes')
+        .select('club_id')
+        .eq('id', athleteId)
+        .single()
+
+      const { data: result, error: err } = await supabase
+        .from('attendance_records')
+        .insert({
+          athlete_id: athleteId,
+          record_date: data.date,
+          record_type: data.record_type || 'training',
+          status: 'leave',
+          leave_type: data.leave_type,
+          leave_reason: data.leave_reason,
+          leave_approved: false,
+          club_id: athlete.data?.club_id,
+          recorded_by: authStore.user?.id
+        })
+        .select()
+        .single()
+
+      if (err) throw err
+      return { success: true, data: result }
+    } catch (err) {
+      error.value = err.message
+      return { success: false, error: err.message }
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function approveLeave(recordId, approved = true) {
+    loading.value = true
+    try {
+      const authStore = useAuthStore()
+      const { error: err } = await supabase
+        .from('attendance_records')
+        .update({
+          leave_approved: approved,
+          approved_by: authStore.user?.id,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', recordId)
+
+      if (err) throw err
+      return { success: true }
+    } catch (err) {
+      error.value = err.message
+      return { success: false, error: err.message }
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function fetchAthleteEvaluations(clubId, month) {
+    loading.value = true
+    error.value = null
+    try {
+      const monthStart = `${month}-01`
+      
+      let query = supabase
+        .from('athlete_evaluations')
+        .select(`
+          *,
+          athlete:athletes(id, name, email, user_id)
+        `)
+        .eq('evaluation_month', monthStart)
+        .order('overall_score', { ascending: false })
+
+      if (clubId) query = query.eq('club_id', clubId)
+
+      const { data, error: err } = await query
+      if (err) throw err
+      evaluations.value = data || []
+    } catch (err) {
+      error.value = err.message
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function calculateAthleteStats(clubId, month) {
+    loading.value = true
+    error.value = null
+    try {
+      const monthStart = `${month}-01`
+      const monthEnd = new Date(month + '-01')
+      monthEnd.setMonth(monthEnd.getMonth() + 1)
+      monthEnd.setDate(0)
+      const endDate = monthEnd.toISOString().slice(0, 10)
+
+      // ดึงข้อมูลนักกีฬาในชมรม
+      let athleteQuery = supabase.from('athletes').select('*')
+      if (clubId) athleteQuery = athleteQuery.eq('club_id', clubId)
+      const { data: athletes } = await athleteQuery
+
+      if (!athletes?.length) {
+        athleteStats.value = []
+        return
+      }
+
+      const stats = []
+      for (const athlete of athletes) {
+        // ดึง attendance records
+        const { data: attendance } = await supabase
+          .from('attendance_records')
+          .select('status')
+          .eq('athlete_id', athlete.id)
+          .gte('record_date', monthStart)
+          .lte('record_date', endDate)
+
+        // ดึง training logs
+        const { data: training } = await supabase
+          .from('training_logs')
+          .select('duration, rating')
+          .eq('athlete_id', athlete.id)
+          .gte('date', monthStart)
+          .lte('date', endDate)
+
+        // คำนวณสถิติ
+        const totalSessions = attendance?.length || 0
+        const onTime = attendance?.filter(a => a.status === 'on_time').length || 0
+        const late = attendance?.filter(a => a.status === 'late').length || 0
+        const leave = attendance?.filter(a => a.status === 'leave').length || 0
+        const absent = attendance?.filter(a => a.status === 'absent').length || 0
+        
+        const attended = onTime + late
+        const attendanceRate = totalSessions > 0 ? (attended / totalSessions) * 100 : 0
+
+        const trainingHours = training?.reduce((sum, t) => sum + (t.duration || 0), 0) / 60 || 0
+        const trainingSessions = training?.length || 0
+        const avgRating = training?.length > 0 
+          ? training.reduce((sum, t) => sum + (t.rating || 0), 0) / training.length 
+          : 0
+
+        // คำนวณ overall score
+        const attendanceScore = attendanceRate * 0.4
+        const trainingScore = Math.min((trainingSessions / 12) * 30, 30) // target 12 sessions/month
+        const ratingScore = (avgRating / 5) * 30
+        const overallScore = attendanceScore + trainingScore + ratingScore
+
+        // กำหนด tier
+        let tier = 'needs_improvement'
+        if (overallScore >= 85) tier = 'excellent'
+        else if (overallScore >= 70) tier = 'good'
+        else if (overallScore >= 50) tier = 'average'
+
+        stats.push({
+          athlete_id: athlete.id,
+          athlete_name: athlete.name,
+          athlete_email: athlete.email,
+          club_id: athlete.club_id,
+          total_sessions: totalSessions,
+          attended_on_time: onTime,
+          attended_late: late,
+          leave_count: leave,
+          absent_count: absent,
+          attendance_rate: Math.round(attendanceRate * 100) / 100,
+          training_hours: Math.round(trainingHours * 100) / 100,
+          training_sessions: trainingSessions,
+          average_rating: Math.round(avgRating * 100) / 100,
+          overall_score: Math.round(overallScore * 100) / 100,
+          performance_tier: tier
+        })
+      }
+
+      athleteStats.value = stats.sort((a, b) => b.overall_score - a.overall_score)
+    } catch (err) {
+      error.value = err.message
+      console.error('Error calculating stats:', err)
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function saveEvaluation(evaluation) {
+    loading.value = true
+    try {
+      const authStore = useAuthStore()
+      const { data, error: err } = await supabase
+        .from('athlete_evaluations')
+        .upsert({
+          ...evaluation,
+          evaluated_by: authStore.user?.id,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'athlete_id,evaluation_month' })
+        .select()
+        .single()
+
+      if (err) throw err
+      return { success: true, data }
+    } catch (err) {
+      error.value = err.message
+      return { success: false, error: err.message }
+    } finally {
+      loading.value = false
+    }
+  }
+
+  function getTierLabel(tier) {
+    const labels = {
+      excellent: 'ดีเยี่ยม',
+      good: 'ดี',
+      average: 'ปานกลาง',
+      needs_improvement: 'ต้องปรับปรุง'
+    }
+    return labels[tier] || tier
+  }
+
+  function getTierColor(tier) {
+    const colors = {
+      excellent: '#22C55E',
+      good: '#3B82F6',
+      average: '#F59E0B',
+      needs_improvement: '#EF4444'
+    }
+    return colors[tier] || '#737373'
+  }
+
+  return {
+    // State
+    attendanceRecords,
+    evaluations,
+    athleteStats,
+    loading,
+    error,
+    selectedMonth,
+    // Getters
+    athletesByTier,
+    topPerformers,
+    needsAttention,
+    attendanceSummary,
+    // Actions
+    fetchAttendanceRecords,
+    recordAttendance,
+    submitLeaveRequest,
+    approveLeave,
+    fetchAthleteEvaluations,
+    calculateAthleteStats,
+    saveEvaluation,
+    getTierLabel,
+    getTierColor
+  }
+})
