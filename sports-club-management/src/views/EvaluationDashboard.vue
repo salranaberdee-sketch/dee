@@ -2,8 +2,19 @@
   <div class="evaluation-dashboard">
     <!-- Header -->
     <div class="page-header">
-      <h1>ประเมินผลนักกีฬา</h1>
-      <p class="subtitle">ติดตามและวัดผลการพัฒนาของนักกีฬา</p>
+      <div class="header-row">
+        <div>
+          <h1>ประเมินผลนักกีฬา</h1>
+          <p class="subtitle">ติดตามและวัดผลการพัฒนาของนักกีฬา</p>
+        </div>
+        <router-link to="/evaluation/settings" class="btn-settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+          </svg>
+          ตั้งค่าเกณฑ์
+        </router-link>
+      </div>
     </div>
 
     <!-- Filters -->
@@ -276,6 +287,14 @@ onMounted(() => {
   margin-bottom: 1.5rem;
 }
 
+.header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
 .page-header h1 {
   font-size: 1.75rem;
   font-weight: 700;
@@ -286,6 +305,30 @@ onMounted(() => {
 .subtitle {
   color: #737373;
   margin: 0.25rem 0 0;
+}
+
+.btn-settings {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: #fff;
+  border: 1px solid #E5E5E5;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  color: #525252;
+  text-decoration: none;
+  transition: all 0.15s;
+}
+
+.btn-settings:hover {
+  background: #F5F5F5;
+  color: #171717;
+}
+
+.btn-settings svg {
+  width: 18px;
+  height: 18px;
 }
 
 .filters-section {

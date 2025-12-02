@@ -2,6 +2,8 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from './auth'
+import { useScoringCriteriaStore } from './scoringCriteria'
+import { calculateScore, DEFAULT_CRITERIA } from '../lib/scoreCalculator'
 
 export const useEvaluationStore = defineStore('evaluation', () => {
   // State
@@ -194,6 +196,13 @@ export const useEvaluationStore = defineStore('evaluation', () => {
     }
   }
 
+  /**
+   * Calculate athlete statistics using configurable scoring criteria
+   * Requirements: 4.1, 4.2, 4.3, 4.4, 4.9
+   * 
+   * @param {string} clubId - The club ID to calculate stats for
+   * @param {string} month - The month in YYYY-MM format
+   */
   async function calculateAthleteStats(clubId, month) {
     loading.value = true
     error.value = null
@@ -203,6 +212,14 @@ export const useEvaluationStore = defineStore('evaluation', () => {
       monthEnd.setMonth(monthEnd.getMonth() + 1)
       monthEnd.setDate(0)
       const endDate = monthEnd.toISOString().slice(0, 10)
+
+      // Fetch scoring criteria and conditions for the club (Requirements 4.1, 4.2, 4.3)
+      const scoringCriteriaStore = useScoringCriteriaStore()
+      await scoringCriteriaStore.fetchCriteria(clubId)
+      await scoringCriteriaStore.fetchConditions(clubId)
+      
+      const criteria = scoringCriteriaStore.getEffectiveCriteria()
+      const conditions = scoringCriteriaStore.activeConditions
 
       // ดึงข้อมูลนักกีฬาในชมรม
       let athleteQuery = supabase.from('athletes').select('*')
@@ -232,7 +249,7 @@ export const useEvaluationStore = defineStore('evaluation', () => {
           .gte('date', monthStart)
           .lte('date', endDate)
 
-        // คำนวณสถิติ
+        // คำนวณสถิติพื้นฐาน
         const totalSessions = attendance?.length || 0
         const onTime = attendance?.filter(a => a.status === 'on_time').length || 0
         const late = attendance?.filter(a => a.status === 'late').length || 0
@@ -248,17 +265,21 @@ export const useEvaluationStore = defineStore('evaluation', () => {
           ? training.reduce((sum, t) => sum + (t.rating || 0), 0) / training.length 
           : 0
 
-        // คำนวณ overall score
-        const attendanceScore = attendanceRate * 0.4
-        const trainingScore = Math.min((trainingSessions / 12) * 30, 30) // target 12 sessions/month
-        const ratingScore = (avgRating / 5) * 30
-        const overallScore = attendanceScore + trainingScore + ratingScore
+        // Prepare athlete stats for score calculation
+        const athleteStatsData = {
+          total_sessions: totalSessions,
+          attended_on_time: onTime,
+          attended_late: late,
+          leave_count: leave,
+          absent_count: absent,
+          attendance_rate: attendanceRate,
+          training_hours: trainingHours,
+          training_sessions: trainingSessions,
+          average_rating: avgRating
+        }
 
-        // กำหนด tier
-        let tier = 'needs_improvement'
-        if (overallScore >= 85) tier = 'excellent'
-        else if (overallScore >= 70) tier = 'good'
-        else if (overallScore >= 50) tier = 'average'
+        // Calculate score using scoreCalculator with criteria and conditions (Requirement 4.4, 4.9)
+        const scoreBreakdown = calculateScore(athleteStatsData, criteria, conditions)
 
         stats.push({
           athlete_id: athlete.id,
@@ -274,8 +295,17 @@ export const useEvaluationStore = defineStore('evaluation', () => {
           training_hours: Math.round(trainingHours * 100) / 100,
           training_sessions: trainingSessions,
           average_rating: Math.round(avgRating * 100) / 100,
-          overall_score: Math.round(overallScore * 100) / 100,
-          performance_tier: tier
+          // Score breakdown from calculator
+          attendance_score: scoreBreakdown.attendance_score,
+          training_score: scoreBreakdown.training_score,
+          rating_score: scoreBreakdown.rating_score,
+          base_score: scoreBreakdown.base_score,
+          bonus_points: scoreBreakdown.bonus_points,
+          penalty_points: scoreBreakdown.penalty_points,
+          overall_score: scoreBreakdown.overall_score,
+          performance_tier: scoreBreakdown.tier,
+          applied_conditions: scoreBreakdown.applied_conditions,
+          criteria_used: scoreBreakdown.criteria_used
         })
       }
 
@@ -288,14 +318,26 @@ export const useEvaluationStore = defineStore('evaluation', () => {
     }
   }
 
-  async function saveEvaluation(evaluation) {
+  /**
+   * Save evaluation and applied conditions to database
+   * Requirements: 8.6
+   * 
+   * @param {Object} evaluation - The evaluation data to save
+   * @param {Array} appliedConditions - Array of applied conditions from score calculation
+   * @returns {Promise<{success: boolean, data?: Object, error?: string}>}
+   */
+  async function saveEvaluation(evaluation, appliedConditions = []) {
     loading.value = true
     try {
       const authStore = useAuthStore()
+      
+      // Prepare evaluation data (exclude applied_conditions from the main record)
+      const { applied_conditions, criteria_used, ...evaluationData } = evaluation
+      
       const { data, error: err } = await supabase
         .from('athlete_evaluations')
         .upsert({
-          ...evaluation,
+          ...evaluationData,
           evaluated_by: authStore.user?.id,
           updated_at: new Date().toISOString()
         }, { onConflict: 'athlete_id,evaluation_month' })
@@ -303,12 +345,94 @@ export const useEvaluationStore = defineStore('evaluation', () => {
         .single()
 
       if (err) throw err
+
+      // Save applied conditions if provided (Requirement 8.6)
+      const conditionsToSave = appliedConditions.length > 0 ? appliedConditions : (applied_conditions || [])
+      if (conditionsToSave.length > 0 && data?.id) {
+        await saveAppliedConditions(data.id, conditionsToSave)
+      }
+
       return { success: true, data }
     } catch (err) {
       error.value = err.message
       return { success: false, error: err.message }
     } finally {
       loading.value = false
+    }
+  }
+
+  /**
+   * Save applied conditions to database
+   * Records which conditions affected each evaluation
+   * Requirement 8.6
+   * 
+   * @param {string} evaluationId - The evaluation ID
+   * @param {Array} appliedConditions - Array of applied conditions
+   * @returns {Promise<{success: boolean, error?: string}>}
+   */
+  async function saveAppliedConditions(evaluationId, appliedConditions) {
+    try {
+      // First, delete existing applied conditions for this evaluation
+      await supabase
+        .from('applied_conditions')
+        .delete()
+        .eq('evaluation_id', evaluationId)
+
+      // Filter conditions that have a valid condition_id
+      const validConditions = appliedConditions.filter(c => c.condition_id)
+
+      if (validConditions.length === 0) {
+        return { success: true }
+      }
+
+      // Prepare records for insertion
+      const records = validConditions.map(condition => ({
+        evaluation_id: evaluationId,
+        condition_id: condition.condition_id,
+        actual_value: condition.actual_value ?? 0,
+        threshold_value: condition.threshold_value ?? 0,
+        condition_met: condition.condition_met ?? false,
+        points_applied: condition.points_applied ?? 0
+      }))
+
+      const { error: insertErr } = await supabase
+        .from('applied_conditions')
+        .insert(records)
+
+      if (insertErr) throw insertErr
+
+      return { success: true }
+    } catch (err) {
+      console.error('Error saving applied conditions:', err)
+      return { success: false, error: err.message }
+    }
+  }
+
+  /**
+   * Fetch applied conditions for an evaluation
+   * Requirement 8.5
+   * 
+   * @param {string} evaluationId - The evaluation ID
+   * @returns {Promise<Array>} Array of applied conditions with condition details
+   */
+  async function fetchAppliedConditions(evaluationId) {
+    try {
+      const { data, error: err } = await supabase
+        .from('applied_conditions')
+        .select(`
+          *,
+          condition:scoring_conditions(
+            id, name, category, condition_type, 
+            threshold_type, comparison_operator, points
+          )
+        `)
+        .eq('evaluation_id', evaluationId)
+
+      if (err) throw err
+      return data || []
+    } catch (err) {
+      console.error('Error fetching applied conditions:', err)
+      return []
     }
   }
 
@@ -353,6 +477,8 @@ export const useEvaluationStore = defineStore('evaluation', () => {
     fetchAthleteEvaluations,
     calculateAthleteStats,
     saveEvaluation,
+    saveAppliedConditions,
+    fetchAppliedConditions,
     getTierLabel,
     getTierColor
   }

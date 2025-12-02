@@ -70,6 +70,15 @@
         </div>
       </div>
 
+      <!-- Score Breakdown Card - Requirement 8.5 -->
+      <div class="score-breakdown-section" v-if="scoreBreakdown">
+        <h2>รายละเอียดคะแนน</h2>
+        <ScoreBreakdownCard 
+          :score-breakdown="scoreBreakdown"
+          :show-no-conditions-message="true"
+        />
+      </div>
+
       <!-- How to Earn Points Section -->
       <div class="earn-points-section">
         <h2>วิธีเพิ่มคะแนน</h2>
@@ -86,7 +95,7 @@
               </div>
               <div class="earn-title">
                 <span class="title">การเข้าร่วม</span>
-                <span class="weight">40% ของคะแนนรวม</span>
+                <span class="weight">{{ criteriaUsed.attendance_weight }}% ของคะแนนรวม</span>
               </div>
             </div>
             <div class="earn-progress">
@@ -100,7 +109,7 @@
             </div>
             <div class="earn-score">
               <span class="current">ได้ {{ attendanceScore.toFixed(1) }} คะแนน</span>
-              <span class="max">จาก 40 คะแนน</span>
+              <span class="max">จาก {{ criteriaUsed.attendance_weight }} คะแนน</span>
             </div>
             <div class="earn-tips">
               <div class="tip-item positive">
@@ -138,28 +147,28 @@
               </div>
               <div class="earn-title">
                 <span class="title">จำนวนฝึกซ้อม</span>
-                <span class="weight">30% ของคะแนนรวม</span>
+                <span class="weight">{{ criteriaUsed.training_weight }}% ของคะแนนรวม</span>
               </div>
             </div>
             <div class="earn-progress">
               <div class="progress-bar">
-                <div class="progress-fill training" :style="{ width: Math.min((stats.training_sessions || 0) / 12 * 100, 100) + '%' }"></div>
+                <div class="progress-fill training" :style="{ width: Math.min((stats.training_sessions || 0) / criteriaUsed.target_training_sessions * 100, 100) + '%' }"></div>
               </div>
               <div class="progress-labels">
                 <span>{{ stats.training_sessions || 0 }} ครั้ง</span>
-                <span>เป้าหมาย 12 ครั้ง</span>
+                <span>เป้าหมาย {{ criteriaUsed.target_training_sessions }} ครั้ง</span>
               </div>
             </div>
             <div class="earn-score">
               <span class="current">ได้ {{ trainingScore.toFixed(1) }} คะแนน</span>
-              <span class="max">จาก 30 คะแนน</span>
+              <span class="max">จาก {{ criteriaUsed.training_weight }} คะแนน</span>
             </div>
             <div class="earn-tips">
               <div class="tip-item positive">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polyline points="20 6 9 17 4 12"/>
                 </svg>
-                <span>ฝึก 12 ครั้ง/เดือน = 30 คะแนนเต็ม</span>
+                <span>ฝึก {{ criteriaUsed.target_training_sessions }} ครั้ง/เดือน = {{ criteriaUsed.training_weight }} คะแนนเต็ม</span>
               </div>
               <div class="tip-item info">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -167,7 +176,7 @@
                   <line x1="12" y1="16" x2="12" y2="12"/>
                   <line x1="12" y1="8" x2="12.01" y2="8"/>
                 </svg>
-                <span>ฝึก 1 ครั้ง = +2.5 คะแนน</span>
+                <span>ฝึก 1 ครั้ง = +{{ (criteriaUsed.training_weight / criteriaUsed.target_training_sessions).toFixed(1) }} คะแนน</span>
               </div>
               <div class="tip-item info">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -190,7 +199,7 @@
               </div>
               <div class="earn-title">
                 <span class="title">Rating จากโค้ช</span>
-                <span class="weight">30% ของคะแนนรวม</span>
+                <span class="weight">{{ criteriaUsed.rating_weight }}% ของคะแนนรวม</span>
               </div>
             </div>
             <div class="earn-progress">
@@ -204,7 +213,7 @@
             </div>
             <div class="earn-score">
               <span class="current">ได้ {{ ratingScore.toFixed(1) }} คะแนน</span>
-              <span class="max">จาก 30 คะแนน</span>
+              <span class="max">จาก {{ criteriaUsed.rating_weight }} คะแนน</span>
             </div>
             <div class="earn-tips">
               <div class="tip-item positive">
@@ -443,13 +452,13 @@
             </svg>
             อัตราการเข้าร่วมต่ำ ({{ stats.attendance_rate }}%) - ควรเข้าร่วมให้มากกว่า 70%
           </li>
-          <li v-if="stats.training_sessions < 8">
+          <li v-if="stats.training_sessions < Math.floor(criteriaUsed.target_training_sessions * 0.67)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="10"/>
               <line x1="12" y1="8" x2="12" y2="12"/>
               <line x1="12" y1="16" x2="12.01" y2="16"/>
             </svg>
-            ฝึกซ้อมน้อย ({{ stats.training_sessions }} ครั้ง) - ควรฝึกอย่างน้อย 8 ครั้ง/เดือน
+            ฝึกซ้อมน้อย ({{ stats.training_sessions }} ครั้ง) - ควรฝึกอย่างน้อย {{ Math.floor(criteriaUsed.target_training_sessions * 0.67) }} ครั้ง/เดือน
           </li>
           <li v-if="stats.absent_count > 3">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -475,10 +484,14 @@ import { useRoute } from 'vue-router'
 import { supabase } from '../lib/supabase'
 import { useEvaluationStore } from '../stores/evaluation'
 import { useAuthStore } from '../stores/auth'
+import { useScoringCriteriaStore } from '../stores/scoringCriteria'
+import { calculateScore } from '../lib/scoreCalculator'
+import ScoreBreakdownCard from '../components/ScoreBreakdownCard.vue'
 
 const route = useRoute()
 const evaluationStore = useEvaluationStore()
 const authStore = useAuthStore()
+const scoringCriteriaStore = useScoringCriteriaStore()
 
 // ถ้าไม่มี id ใน params แสดงว่าเป็น athlete ดูผลงานตัวเอง
 const athleteId = ref(null)
@@ -487,15 +500,36 @@ const stats = ref({})
 const attendanceHistory = ref([])
 const loading = ref(true)
 const selectedMonth = ref(new Date().toISOString().slice(0, 7))
+const scoreBreakdown = ref(null)
 
 function getTierLabel(tier) {
   return evaluationStore.getTierLabel(tier)
 }
 
-// คำนวณคะแนนแต่ละส่วน
-const attendanceScore = computed(() => (stats.value.attendance_rate || 0) * 0.4)
-const trainingScore = computed(() => Math.min(((stats.value.training_sessions || 0) / 12) * 30, 30))
-const ratingScore = computed(() => ((stats.value.average_rating || 0) / 5) * 30)
+// Get configured weights from scoreBreakdown (Requirement 5.2)
+const criteriaUsed = computed(() => {
+  return scoreBreakdown.value?.criteria_used || {
+    attendance_weight: 40,
+    training_weight: 30,
+    rating_weight: 30,
+    target_training_sessions: 12
+  }
+})
+
+// คำนวณคะแนนแต่ละส่วน using configured weights
+const attendanceScore = computed(() => {
+  const weight = criteriaUsed.value.attendance_weight
+  return (stats.value.attendance_rate || 0) * (weight / 100)
+})
+const trainingScore = computed(() => {
+  const weight = criteriaUsed.value.training_weight
+  const target = criteriaUsed.value.target_training_sessions || 12
+  return Math.min(((stats.value.training_sessions || 0) / target) * weight, weight)
+})
+const ratingScore = computed(() => {
+  const weight = criteriaUsed.value.rating_weight
+  return ((stats.value.average_rating || 0) / 5) * weight
+})
 
 // หา tier ถัดไป
 const nextTier = computed(() => {
@@ -512,15 +546,16 @@ const pointsToNextTier = computed(() => {
   return nextTier.value.required - score
 })
 
-// คำแนะนำเพื่อเพิ่มคะแนน
+// คำแนะนำเพื่อเพิ่มคะแนน (using configured weights)
 const suggestions = computed(() => {
   const list = []
   const s = stats.value
+  const criteria = criteriaUsed.value
   
   // ถ้าเข้าร่วมน้อย
   if ((s.attendance_rate || 0) < 90) {
-    const currentScore = (s.attendance_rate || 0) * 0.4
-    const targetScore = 90 * 0.4
+    const currentScore = (s.attendance_rate || 0) * (criteria.attendance_weight / 100)
+    const targetScore = 90 * (criteria.attendance_weight / 100)
     const gain = Math.round((targetScore - currentScore) * 10) / 10
     if (gain > 0) {
       list.push({
@@ -533,21 +568,22 @@ const suggestions = computed(() => {
   }
   
   // ถ้าฝึกซ้อมน้อย
-  if ((s.training_sessions || 0) < 12) {
-    const remaining = 12 - (s.training_sessions || 0)
-    const gain = Math.round((remaining / 12) * 30 * 10) / 10
+  const targetSessions = criteria.target_training_sessions || 12
+  if ((s.training_sessions || 0) < targetSessions) {
+    const remaining = targetSessions - (s.training_sessions || 0)
+    const gain = Math.round((remaining / targetSessions) * criteria.training_weight * 10) / 10
     list.push({
       type: 'training',
       title: `ฝึกซ้อมเพิ่มอีก ${remaining} ครั้ง`,
-      description: 'บันทึกการฝึกซ้อมให้ครบ 12 ครั้ง/เดือน',
+      description: `บันทึกการฝึกซ้อมให้ครบ ${targetSessions} ครั้ง/เดือน`,
       points: gain
     })
   }
   
   // ถ้า rating ต่ำ
   if ((s.average_rating || 0) < 4) {
-    const currentScore = ((s.average_rating || 0) / 5) * 30
-    const targetScore = (4 / 5) * 30
+    const currentScore = ((s.average_rating || 0) / 5) * criteria.rating_weight
+    const targetScore = (4 / 5) * criteria.rating_weight
     const gain = Math.round((targetScore - currentScore) * 10) / 10
     if (gain > 0) {
       list.push({
@@ -706,6 +742,46 @@ async function loadData() {
       average_rating: avgRating,
       overall_score: overallScore,
       performance_tier: tier
+    }
+
+    // Fetch scoring criteria and conditions for the club
+    // Requirement 8.5: Show breakdown including all applied conditions
+    if (athleteData?.club_id) {
+      await scoringCriteriaStore.fetchCriteria(athleteData.club_id)
+      await scoringCriteriaStore.fetchConditions(athleteData.club_id)
+      
+      // Calculate score breakdown with criteria and conditions
+      const criteria = scoringCriteriaStore.getEffectiveCriteria()
+      const conditions = scoringCriteriaStore.activeConditions
+      
+      scoreBreakdown.value = calculateScore(
+        {
+          attendance_rate: attendanceRate,
+          training_sessions: trainingSessions,
+          average_rating: avgRating,
+          absent_count: absent,
+          training_hours: trainingHours
+        },
+        criteria,
+        conditions
+      )
+      
+      // Update stats with calculated values from scoreBreakdown
+      stats.value.overall_score = scoreBreakdown.value.overall_score
+      stats.value.performance_tier = scoreBreakdown.value.tier
+    } else {
+      // No club, use basic calculation
+      scoreBreakdown.value = calculateScore(
+        {
+          attendance_rate: attendanceRate,
+          training_sessions: trainingSessions,
+          average_rating: avgRating,
+          absent_count: absent,
+          training_hours: trainingHours
+        },
+        null,
+        []
+      )
     }
   } catch (err) {
     console.error('Error loading data:', err)
@@ -1432,6 +1508,17 @@ onMounted(() => {
   text-align: center;
   padding: 3rem;
   color: #737373;
+}
+
+/* Score Breakdown Section */
+.score-breakdown-section {
+  margin-bottom: 2rem;
+}
+
+.score-breakdown-section h2 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0 0 1rem;
 }
 
 @media (max-width: 640px) {

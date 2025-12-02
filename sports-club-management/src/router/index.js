@@ -17,6 +17,7 @@ const routes = [
   { path: '/athletes', name: 'Athletes', component: () => import('@/views/Athletes.vue'), meta: { requiresAuth: true, roles: ['admin', 'coach'] } },
   { path: '/club-applications', name: 'ClubApplications', component: () => import('@/views/ClubApplications.vue'), meta: { requiresAuth: true, roles: ['admin', 'coach'] } },
   { path: '/evaluation', name: 'EvaluationDashboard', component: () => import('@/views/EvaluationDashboard.vue'), meta: { requiresAuth: true, roles: ['admin', 'coach'] } },
+  { path: '/evaluation/settings', name: 'ScoringCriteriaSettings', component: () => import('@/views/ScoringCriteriaSettings.vue'), meta: { requiresAuth: true, roles: ['admin', 'coach'] } },
   { path: '/evaluation/athlete/:id', name: 'AthletePerformance', component: () => import('@/views/AthletePerformance.vue'), meta: { requiresAuth: true } },
   { path: '/attendance', name: 'AttendanceManager', component: () => import('@/views/AttendanceManager.vue'), meta: { requiresAuth: true, roles: ['admin', 'coach'] } },
   { path: '/tournaments', name: 'Tournaments', component: () => import('@/views/Tournaments.vue'), meta: { requiresAuth: true } },

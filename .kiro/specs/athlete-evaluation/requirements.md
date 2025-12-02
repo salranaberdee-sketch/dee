@@ -2,7 +2,7 @@
 
 ## Introduction
 
-ระบบสำหรับติดตามและประเมินผลนักกีฬาแต่ละคน โดยวัดจากการเข้าร่วมกิจกรรม การฝึกซ้อม และผลงานโดยรวม เพื่อคัดแยกนักกีฬาที่มีผลงานดีและต้องปรับปรุง ทุกฟีเจอร์ต้องเชื่อมโยงกันอย่างสมบูรณ์
+ระบบสำหรับติดตามและประเมินผลนักกีฬาแต่ละคน โดยวัดจากการเข้าร่วมกิจกรรม การฝึกซ้อม และผลงานโดยรวม เพื่อคัดแยกนักกีฬาที่มีผลงานดีและต้องปรับปรุง ทุกฟีเจอร์ต้องเชื่อมโยงกันอย่างสมบูรณ์ Admin/Coach สามารถกำหนดเกณฑ์การให้คะแนนแต่ละกิจกรรมได้เองโดยเพิ่มเงื่อนไขได้
 
 ## Glossary
 
@@ -12,6 +12,9 @@
 - **Overall Score**: คะแนนรวมจากการคำนวณ (0-100)
 - **Schedule**: นัดหมายฝึกซ้อม/ประชุม
 - **Event**: กิจกรรมพิเศษ/แข่งขัน
+- **Scoring Criteria**: เกณฑ์การให้คะแนนที่กำหนดโดย Admin/Coach
+- **Scoring Category**: หมวดหมู่คะแนน (attendance/training/rating/custom)
+- **Scoring Condition**: เงื่อนไขการให้คะแนนเพิ่มเติม
 
 ## Requirements
 
@@ -55,14 +58,44 @@
 
 #### Acceptance Criteria
 
-1. WHEN calculating attendance_score THEN the system SHALL use formula: (on_time + late) / total * 100 * 0.4
-2. WHEN calculating training_score THEN the system SHALL use formula: min(sessions / 12, 1) * 30
-3. WHEN calculating rating_score THEN the system SHALL use formula: (average_rating / 5) * 30
-4. WHEN calculating overall_score THEN the system SHALL sum attendance_score + training_score + rating_score
+1. WHEN calculating attendance_score THEN the system SHALL use formula based on configured weight (default 40%)
+2. WHEN calculating training_score THEN the system SHALL use formula based on configured weight (default 30%)
+3. WHEN calculating rating_score THEN the system SHALL use formula based on configured weight (default 30%)
+4. WHEN calculating overall_score THEN the system SHALL sum all category scores including custom criteria
 5. WHEN overall_score >= 85 THEN the system SHALL assign tier 'excellent'
 6. WHEN overall_score >= 70 AND < 85 THEN the system SHALL assign tier 'good'
 7. WHEN overall_score >= 50 AND < 70 THEN the system SHALL assign tier 'average'
 8. WHEN overall_score < 50 THEN the system SHALL assign tier 'needs_improvement'
+9. WHEN custom scoring criteria exist THEN the system SHALL include bonus/penalty points in calculation
+
+### Requirement 7: กำหนดเกณฑ์การให้คะแนน (Scoring Criteria Configuration)
+
+**User Story:** As an admin or coach, I want to configure scoring criteria for each activity, so that I can customize evaluation based on club requirements.
+
+#### Acceptance Criteria
+
+1. WHEN an admin or coach opens scoring criteria settings THEN the system SHALL display current criteria configuration for the club
+2. WHEN configuring base weights THEN the system SHALL allow setting percentage for attendance, training, and rating (total must equal 100%)
+3. WHEN adding a custom scoring condition THEN the system SHALL require name, category, condition_type, threshold_value, and points
+4. WHEN condition_type is 'bonus' THEN the system SHALL add points when athlete meets the threshold
+5. WHEN condition_type is 'penalty' THEN the system SHALL subtract points when athlete fails the threshold
+6. WHEN saving scoring criteria THEN the system SHALL validate that total base weights equal 100%
+7. WHEN a club has no custom criteria THEN the system SHALL use default weights (attendance 40%, training 30%, rating 30%)
+8. WHEN deleting a scoring condition THEN the system SHALL remove it from future calculations
+9. WHEN updating scoring criteria THEN the system SHALL recalculate all athlete scores in the club
+
+### Requirement 8: เงื่อนไขคะแนนพิเศษ (Custom Scoring Conditions)
+
+**User Story:** As a coach, I want to add special scoring conditions, so that I can reward or penalize specific behaviors.
+
+#### Acceptance Criteria
+
+1. WHEN creating a bonus condition for perfect attendance THEN the system SHALL add specified points when athlete has 100% attendance
+2. WHEN creating a penalty condition for excessive absences THEN the system SHALL subtract points when absences exceed threshold
+3. WHEN creating a bonus for training consistency THEN the system SHALL add points when athlete trains specified days per week
+4. WHEN creating a bonus for high ratings THEN the system SHALL add points when average rating exceeds threshold
+5. WHEN displaying athlete score THEN the system SHALL show breakdown including all applied conditions
+6. WHEN a condition is met THEN the system SHALL log which conditions affected the score
 
 ### Requirement 5: แสดงผลงานนักกีฬา (Athlete Performance View)
 
@@ -100,6 +133,10 @@
 | บันทึก Training Log | ✅ | ✅ | ✅ (ตัวเอง) |
 | ให้ Rating | ✅ | ✅ | ❌ |
 | Export รายงาน | ✅ | ✅ | ❌ |
+| กำหนดเกณฑ์คะแนน | ✅ | ✅ | ❌ |
+| เพิ่มเงื่อนไขคะแนน | ✅ | ✅ | ❌ |
+| ลบเงื่อนไขคะแนน | ✅ | ✅ | ❌ |
+| ดูเงื่อนไขที่ใช้กับตัวเอง | ✅ | ✅ | ✅ |
 
 ## Data Flow
 
@@ -118,4 +155,47 @@ training_logs ──────→ CALCULATION ←── rating
 - attendance_records.schedule_id หรือ event_id ต้องมีค่าอย่างน้อย 1 อัน (สำหรับการลา)
 - attendance_records.club_id ต้องตรงกับ athlete.club_id
 - training_logs.rating ต้องอยู่ระหว่าง 1-5
+- scoring_criteria.total_weight ต้องเท่ากับ 100
+- scoring_conditions.points ต้องเป็นจำนวนเต็ม (บวกสำหรับ bonus, ลบสำหรับ penalty)
+- scoring_conditions.condition_type ต้องเป็น 'bonus' หรือ 'penalty'
 - ทุกตารางต้องมี RLS policies ครบตาม development-workflow.md
+
+## Scoring Criteria Data Model
+
+```
+scoring_criteria (เกณฑ์คะแนนหลัก)
+├── id (uuid)
+├── club_id (uuid) → clubs.id
+├── attendance_weight (integer, default 40)
+├── training_weight (integer, default 30)
+├── rating_weight (integer, default 30)
+├── created_by (uuid) → user_profiles.id
+├── created_at (timestamp)
+└── updated_at (timestamp)
+
+scoring_conditions (เงื่อนไขคะแนนเพิ่มเติม)
+├── id (uuid)
+├── club_id (uuid) → clubs.id
+├── criteria_id (uuid) → scoring_criteria.id
+├── name (text) - ชื่อเงื่อนไข
+├── category (text) - attendance/training/rating/custom
+├── condition_type (text) - bonus/penalty
+├── threshold_type (text) - percentage/count/value
+├── threshold_value (numeric) - ค่าที่ต้องถึง
+├── points (integer) - คะแนนที่ได้/หัก
+├── description (text) - คำอธิบาย
+├── is_active (boolean, default true)
+├── created_by (uuid) → user_profiles.id
+├── created_at (timestamp)
+└── updated_at (timestamp)
+```
+
+## Example Scoring Conditions
+
+| ชื่อเงื่อนไข | หมวด | ประเภท | เกณฑ์ | คะแนน |
+|------------|------|--------|------|-------|
+| เข้าร่วมครบ 100% | attendance | bonus | percentage >= 100 | +5 |
+| ขาดเกิน 3 ครั้ง | attendance | penalty | count > 3 | -10 |
+| ฝึกซ้อมครบ 4 วัน/สัปดาห์ | training | bonus | count >= 4 | +5 |
+| Rating เฉลี่ย 4.5+ | rating | bonus | value >= 4.5 | +5 |
+| ไม่มีการฝึกซ้อม | training | penalty | count = 0 | -15 |
