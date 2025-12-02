@@ -26,7 +26,7 @@ const routes = [
   { path: '/schedules', name: 'Schedules', component: () => import('@/views/Schedules.vue'), meta: { requiresAuth: true } },
   { path: '/training-logs', name: 'TrainingLogs', component: () => import('@/views/TrainingLogs.vue'), meta: { requiresAuth: true } },
   { path: '/announcements', name: 'Announcements', component: () => import('@/views/Announcements.vue'), meta: { requiresAuth: true } },
-  { path: '/notifications', name: 'Notifications', component: () => import('@/views/Notifications.vue'), meta: { requiresAuth: true } },
+  { path: '/notifications', name: 'NotificationInbox', component: () => import('@/views/NotificationInbox.vue'), meta: { requiresAuth: true } },
   { path: '/notification-settings', name: 'NotificationSettings', component: () => import('@/views/NotificationSettings.vue'), meta: { requiresAuth: true } },
   { path: '/profile', name: 'Profile', component: () => import('@/views/Profile.vue'), meta: { requiresAuth: true } },
 ]

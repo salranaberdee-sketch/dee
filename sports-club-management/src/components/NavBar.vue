@@ -2,11 +2,15 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-
-defineProps({ unread: { type: Number, default: 0 } })
+import { useNotificationInboxStore } from '@/stores/notificationInbox'
+import NotificationBadge from '@/components/NotificationBadge.vue'
 
 const route = useRoute()
 const auth = useAuthStore()
+const notificationInbox = useNotificationInboxStore()
+
+// Get unread count from notification inbox store
+const unreadCount = computed(() => notificationInbox.unreadCount)
 
 const navItems = computed(() => {
   const items = [
@@ -50,13 +54,11 @@ function isActive(to) {
         <svg v-else-if="item.icon === 'trophy'" viewBox="0 0 24 24" fill="none" stroke="currentColor">
           <path d="M6 9H4.5a2.5 2.5 0 010-5H6M18 9h1.5a2.5 2.5 0 000-5H18M4 22h16M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20 7 22M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20 17 22M18 2H6v7a6 6 0 0012 0V2z"/>
         </svg>
-        <svg v-else-if="item.icon === 'bell'" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/>
-        </svg>
+        <!-- Use NotificationBadge component for bell icon (Requirements 3.1) -->
+        <NotificationBadge v-else-if="item.icon === 'bell'" />
         <svg v-else-if="item.icon === 'user'" viewBox="0 0 24 24" fill="none" stroke="currentColor">
           <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
         </svg>
-        <span v-if="item.icon === 'bell' && unread > 0" class="nav-badge">{{ unread > 9 ? '9+' : unread }}</span>
       </div>
       <span class="nav-label">{{ item.label }}</span>
     </router-link>

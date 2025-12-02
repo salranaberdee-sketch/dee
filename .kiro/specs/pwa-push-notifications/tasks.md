@@ -34,7 +34,9 @@
     - Implement unsubscribeFromPush(userId) - remove subscription from DB
     - Implement getVapidPublicKey() - get VAPID key for subscription
     - _Requirements: 1.1, 4.2_
-  - [ ]* 2.3 Write property test for notification delivery to subscribed devices
+  - [x]* 2.3 Write property test for notification delivery to subscribed devices
+
+
     - **Property 2: Notification delivery to all subscribed devices**
     - **Validates: Requirements 1.3**
 
@@ -45,7 +47,8 @@
     - Implement updatePreference(type, enabled) action
     - Implement fetchSubscriptions(userId) action
     - _Requirements: 2.1, 2.2, 2.3, 2.4_
-  - [ ]* 3.2 Write property test for preference filtering correctness
+  - [x]* 3.2 Write property test for preference filtering correctness
+
     - **Property 4: Preference filtering correctness**
     - **Validates: Requirements 2.2, 2.3**
 
@@ -63,10 +66,14 @@
     - Navigate to relevant content based on reference_type and reference_id
     - Focus existing window or open new one
     - _Requirements: 6.3_
-  - [ ]* 5.3 Write property test for notification display format
+  - [x]* 5.3 Write property test for notification display format
+
     - **Property 3: Notification display format completeness**
     - **Validates: Requirements 1.4**
-  - [ ]* 5.4 Write property test for notification click navigation
+
+  - [x]* 5.4 Write property test for notification click navigation
+
+
     - **Property 10: Notification click navigation**
     - **Validates: Requirements 6.3**
 
@@ -108,10 +115,12 @@
     - Handle 410 Gone response - remove invalid subscription
     - Handle other errors with logging
     - _Requirements: 4.4_
-  - [ ]* 8.4 Write property test for target type filtering
+  - [x]* 8.4 Write property test for target type filtering
+
     - **Property 6: Target type filtering correctness**
     - **Validates: Requirements 5.1, 5.2, 5.3, 5.4**
-  - [ ]* 8.5 Write property test for invalid subscription cleanup
+  - [x]* 8.5 Write property test for invalid subscription cleanup
+
     - **Property 9: Invalid subscription cleanup**
     - **Validates: Requirements 4.4**
 
@@ -132,7 +141,8 @@
     - Modify club application approval/rejection flow
     - Notify the applicant
     - _Requirements: 3.5_
-  - [ ]* 9.5 Write property test for status change notification delivery
+  - [x]* 9.5 Write property test for status change notification delivery
+
     - **Property 7: Status change notification delivery**
     - **Validates: Requirements 3.4, 3.5**
 
@@ -141,7 +151,9 @@
     - Modify logout flow in auth store
     - Call unsubscribeFromPush before clearing session
     - _Requirements: 4.2_
-  - [ ]* 10.2 Write property test for logout subscription cleanup
+  - [x]* 10.2 Write property test for logout subscription cleanup
+
+
     - **Property 8: Logout subscription cleanup**
     - **Validates: Requirements 4.2**
 

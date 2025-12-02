@@ -3,6 +3,7 @@ import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useDataStore } from '@/stores/data'
+import { useNotificationInboxStore } from '@/stores/notificationInbox'
 import NavBar from '@/components/NavBar.vue'
 import UrgentAnnouncementPopup from '@/components/UrgentAnnouncementPopup.vue'
 import InstallPrompt from '@/components/InstallPrompt.vue'
@@ -11,6 +12,7 @@ import PushNotificationPrompt from '@/components/PushNotificationPrompt.vue'
 const route = useRoute()
 const auth = useAuthStore()
 const data = useDataStore()
+const notificationInbox = useNotificationInboxStore()
 const isOffline = ref(!navigator.onLine)
 
 const showNav = computed(() => auth.isAuthenticated && route.name !== 'Login' && route.name !== 'AthleteRegistration')
@@ -19,13 +21,19 @@ function updateOnlineStatus() {
   isOffline.value = !navigator.onLine
 }
 
-// Fetch notifications when user logs in
+// Fetch notifications when user logs in (both old and new notification systems)
 watch(() => auth.user?.id, async (userId) => {
   if (userId) {
+    // Old notification system (for backward compatibility)
     await data.fetchNotifications(userId)
     data.subscribeToNotifications(userId)
+    
+    // New notification inbox system (Requirements 3.1, 3.4)
+    await notificationInbox.fetchUnreadCount(userId)
+    notificationInbox.subscribeToRealtime(userId)
   } else {
     data.unsubscribeFromNotifications()
+    notificationInbox.reset()
   }
 }, { immediate: true })
 
@@ -38,6 +46,7 @@ onUnmounted(() => {
   window.removeEventListener('online', updateOnlineStatus)
   window.removeEventListener('offline', updateOnlineStatus)
   data.unsubscribeFromNotifications()
+  notificationInbox.unsubscribeFromRealtime()
 })
 </script>
 
@@ -60,7 +69,7 @@ onUnmounted(() => {
     </div>
     
     <template v-else>
-      <NavBar v-if="showNav" :unread="data.unreadNotificationsCount" />
+      <NavBar v-if="showNav" />
       <main class="main-content">
         <router-view />
       </main>
