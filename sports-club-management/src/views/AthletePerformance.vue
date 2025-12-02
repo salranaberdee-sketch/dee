@@ -44,11 +44,275 @@
         </button>
       </div>
 
-      <!-- Score Overview -->
+      <!-- Score Overview with Target -->
       <div class="score-section">
         <div class="score-circle" :style="{ '--score': stats.overall_score }">
           <span class="score-value">{{ stats.overall_score || 0 }}</span>
           <span class="score-label">คะแนนรวม</span>
+        </div>
+        <div class="target-info">
+          <div class="target-tier" :class="nextTier.key">
+            <span class="target-label">เป้าหมายถัดไป</span>
+            <span class="target-name">{{ nextTier.label }}</span>
+            <span class="target-score">ต้องการ {{ nextTier.required }} คะแนน</span>
+          </div>
+          <div class="points-needed" v-if="pointsToNextTier > 0">
+            <span class="needed-value">+{{ pointsToNextTier }}</span>
+            <span class="needed-label">คะแนนที่ต้องเพิ่ม</span>
+          </div>
+          <div class="points-needed achieved" v-else>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
+              <polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+            <span class="needed-label">ถึงระดับสูงสุดแล้ว!</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- How to Earn Points Section -->
+      <div class="earn-points-section">
+        <h2>วิธีเพิ่มคะแนน</h2>
+        <div class="earn-cards">
+          <!-- Attendance Card -->
+          <div class="earn-card">
+            <div class="earn-header">
+              <div class="earn-icon attendance">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+                  <circle cx="9" cy="7" r="4"/>
+                  <polyline points="16 11 18 13 22 9"/>
+                </svg>
+              </div>
+              <div class="earn-title">
+                <span class="title">การเข้าร่วม</span>
+                <span class="weight">40% ของคะแนนรวม</span>
+              </div>
+            </div>
+            <div class="earn-progress">
+              <div class="progress-bar">
+                <div class="progress-fill" :style="{ width: Math.min(stats.attendance_rate || 0, 100) + '%' }"></div>
+              </div>
+              <div class="progress-labels">
+                <span>{{ stats.attendance_rate || 0 }}%</span>
+                <span>เป้าหมาย 100%</span>
+              </div>
+            </div>
+            <div class="earn-score">
+              <span class="current">ได้ {{ attendanceScore.toFixed(1) }} คะแนน</span>
+              <span class="max">จาก 40 คะแนน</span>
+            </div>
+            <div class="earn-tips">
+              <div class="tip-item positive">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+                <span>มาตรงเวลา = นับเป็นเข้าร่วม</span>
+              </div>
+              <div class="tip-item positive">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+                <span>มาสาย = นับเป็นเข้าร่วม</span>
+              </div>
+              <div class="tip-item negative">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                  <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+                <span>ลา/ขาด = ไม่นับเป็นเข้าร่วม</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Training Card -->
+          <div class="earn-card">
+            <div class="earn-header">
+              <div class="earn-icon training">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 8h1a4 4 0 010 8h-1M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/>
+                  <line x1="6" y1="1" x2="6" y2="4"/>
+                  <line x1="10" y1="1" x2="10" y2="4"/>
+                  <line x1="14" y1="1" x2="14" y2="4"/>
+                </svg>
+              </div>
+              <div class="earn-title">
+                <span class="title">จำนวนฝึกซ้อม</span>
+                <span class="weight">30% ของคะแนนรวม</span>
+              </div>
+            </div>
+            <div class="earn-progress">
+              <div class="progress-bar">
+                <div class="progress-fill training" :style="{ width: Math.min((stats.training_sessions || 0) / 12 * 100, 100) + '%' }"></div>
+              </div>
+              <div class="progress-labels">
+                <span>{{ stats.training_sessions || 0 }} ครั้ง</span>
+                <span>เป้าหมาย 12 ครั้ง</span>
+              </div>
+            </div>
+            <div class="earn-score">
+              <span class="current">ได้ {{ trainingScore.toFixed(1) }} คะแนน</span>
+              <span class="max">จาก 30 คะแนน</span>
+            </div>
+            <div class="earn-tips">
+              <div class="tip-item positive">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+                <span>ฝึก 12 ครั้ง/เดือน = 30 คะแนนเต็ม</span>
+              </div>
+              <div class="tip-item info">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="16" x2="12" y2="12"/>
+                  <line x1="12" y1="8" x2="12.01" y2="8"/>
+                </svg>
+                <span>ฝึก 1 ครั้ง = +2.5 คะแนน</span>
+              </div>
+              <div class="tip-item info">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="16" x2="12" y2="12"/>
+                  <line x1="12" y1="8" x2="12.01" y2="8"/>
+                </svg>
+                <span>ต้องบันทึกใน "บันทึกฝึกซ้อม"</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Rating Card -->
+          <div class="earn-card">
+            <div class="earn-header">
+              <div class="earn-icon rating">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                </svg>
+              </div>
+              <div class="earn-title">
+                <span class="title">Rating จากโค้ช</span>
+                <span class="weight">30% ของคะแนนรวม</span>
+              </div>
+            </div>
+            <div class="earn-progress">
+              <div class="progress-bar">
+                <div class="progress-fill rating" :style="{ width: (stats.average_rating || 0) / 5 * 100 + '%' }"></div>
+              </div>
+              <div class="progress-labels">
+                <span>{{ stats.average_rating || 0 }} ดาว</span>
+                <span>เป้าหมาย 5 ดาว</span>
+              </div>
+            </div>
+            <div class="earn-score">
+              <span class="current">ได้ {{ ratingScore.toFixed(1) }} คะแนน</span>
+              <span class="max">จาก 30 คะแนน</span>
+            </div>
+            <div class="earn-tips">
+              <div class="tip-item positive">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+                <span>ตั้งใจฝึกซ้อม = Rating สูง</span>
+              </div>
+              <div class="tip-item positive">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+                <span>ทำตามคำแนะนำโค้ช</span>
+              </div>
+              <div class="tip-item info">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="16" x2="12" y2="12"/>
+                  <line x1="12" y1="8" x2="12.01" y2="8"/>
+                </svg>
+                <span>โค้ชให้คะแนนในบันทึกฝึกซ้อม</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tier Requirements -->
+      <div class="tier-requirements">
+        <h2>เกณฑ์แต่ละระดับ</h2>
+        <div class="tier-cards">
+          <div class="tier-card" :class="{ active: stats.performance_tier === 'excellent' }">
+            <div class="tier-header excellent">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+              </svg>
+              <span>ดีเยี่ยม</span>
+            </div>
+            <div class="tier-requirement">≥ 85 คะแนน</div>
+            <div class="tier-check" v-if="stats.overall_score >= 85">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+              ผ่านแล้ว!
+            </div>
+          </div>
+          <div class="tier-card" :class="{ active: stats.performance_tier === 'good' }">
+            <div class="tier-header good">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
+                <polyline points="22 4 12 14.01 9 11.01"/>
+              </svg>
+              <span>ดี</span>
+            </div>
+            <div class="tier-requirement">≥ 70 คะแนน</div>
+            <div class="tier-check" v-if="stats.overall_score >= 70">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+              ผ่านแล้ว!
+            </div>
+          </div>
+          <div class="tier-card" :class="{ active: stats.performance_tier === 'average' }">
+            <div class="tier-header average">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="8" y1="12" x2="16" y2="12"/>
+              </svg>
+              <span>ปานกลาง</span>
+            </div>
+            <div class="tier-requirement">≥ 50 คะแนน</div>
+            <div class="tier-check" v-if="stats.overall_score >= 50">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+              ผ่านแล้ว!
+            </div>
+          </div>
+          <div class="tier-card" :class="{ active: stats.performance_tier === 'needs_improvement' }">
+            <div class="tier-header needs_improvement">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              <span>ต้องปรับปรุง</span>
+            </div>
+            <div class="tier-requirement">&lt; 50 คะแนน</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Suggestions -->
+      <div class="action-section" v-if="suggestions.length > 0">
+        <h2>สิ่งที่ควรทำเพื่อเพิ่มคะแนน</h2>
+        <div class="suggestion-list">
+          <div v-for="(suggestion, index) in suggestions" :key="index" class="suggestion-item">
+            <div class="suggestion-icon" :class="suggestion.type">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+              </svg>
+            </div>
+            <div class="suggestion-content">
+              <span class="suggestion-title">{{ suggestion.title }}</span>
+              <span class="suggestion-desc">{{ suggestion.description }}</span>
+            </div>
+            <div class="suggestion-points">+{{ suggestion.points }} คะแนน</div>
+          </div>
         </div>
       </div>
 
@@ -227,6 +491,76 @@ const selectedMonth = ref(new Date().toISOString().slice(0, 7))
 function getTierLabel(tier) {
   return evaluationStore.getTierLabel(tier)
 }
+
+// คำนวณคะแนนแต่ละส่วน
+const attendanceScore = computed(() => (stats.value.attendance_rate || 0) * 0.4)
+const trainingScore = computed(() => Math.min(((stats.value.training_sessions || 0) / 12) * 30, 30))
+const ratingScore = computed(() => ((stats.value.average_rating || 0) / 5) * 30)
+
+// หา tier ถัดไป
+const nextTier = computed(() => {
+  const score = stats.value.overall_score || 0
+  if (score >= 85) return { key: 'excellent', label: 'ดีเยี่ยม', required: 85 }
+  if (score >= 70) return { key: 'excellent', label: 'ดีเยี่ยม', required: 85 }
+  if (score >= 50) return { key: 'good', label: 'ดี', required: 70 }
+  return { key: 'average', label: 'ปานกลาง', required: 50 }
+})
+
+const pointsToNextTier = computed(() => {
+  const score = stats.value.overall_score || 0
+  if (score >= 85) return 0
+  return nextTier.value.required - score
+})
+
+// คำแนะนำเพื่อเพิ่มคะแนน
+const suggestions = computed(() => {
+  const list = []
+  const s = stats.value
+  
+  // ถ้าเข้าร่วมน้อย
+  if ((s.attendance_rate || 0) < 90) {
+    const currentScore = (s.attendance_rate || 0) * 0.4
+    const targetScore = 90 * 0.4
+    const gain = Math.round((targetScore - currentScore) * 10) / 10
+    if (gain > 0) {
+      list.push({
+        type: 'attendance',
+        title: 'เข้าร่วมให้ครบ',
+        description: `เพิ่มอัตราเข้าร่วมจาก ${s.attendance_rate || 0}% เป็น 90%`,
+        points: gain
+      })
+    }
+  }
+  
+  // ถ้าฝึกซ้อมน้อย
+  if ((s.training_sessions || 0) < 12) {
+    const remaining = 12 - (s.training_sessions || 0)
+    const gain = Math.round((remaining / 12) * 30 * 10) / 10
+    list.push({
+      type: 'training',
+      title: `ฝึกซ้อมเพิ่มอีก ${remaining} ครั้ง`,
+      description: 'บันทึกการฝึกซ้อมให้ครบ 12 ครั้ง/เดือน',
+      points: gain
+    })
+  }
+  
+  // ถ้า rating ต่ำ
+  if ((s.average_rating || 0) < 4) {
+    const currentScore = ((s.average_rating || 0) / 5) * 30
+    const targetScore = (4 / 5) * 30
+    const gain = Math.round((targetScore - currentScore) * 10) / 10
+    if (gain > 0) {
+      list.push({
+        type: 'rating',
+        title: 'เพิ่ม Rating เป็น 4 ดาว',
+        description: 'ตั้งใจฝึกซ้อมและทำตามคำแนะนำโค้ช',
+        points: gain
+      })
+    }
+  }
+  
+  return list.sort((a, b) => b.points - a.points).slice(0, 3)
+})
 
 function formatMonth(month) {
   const date = new Date(month + '-01')
@@ -509,7 +843,358 @@ onMounted(() => {
 .score-section {
   display: flex;
   justify-content: center;
+  align-items: center;
+  gap: 2rem;
   margin-bottom: 2rem;
+  flex-wrap: wrap;
+}
+
+.target-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.target-tier {
+  padding: 1rem;
+  border-radius: 12px;
+  text-align: center;
+}
+
+.target-tier.excellent { background: #D1FAE5; }
+.target-tier.good { background: #DBEAFE; }
+.target-tier.average { background: #FEF3C7; }
+
+.target-label {
+  display: block;
+  font-size: 0.75rem;
+  color: #525252;
+}
+
+.target-name {
+  display: block;
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0.25rem 0;
+}
+
+.target-score {
+  display: block;
+  font-size: 0.875rem;
+  color: #525252;
+}
+
+.points-needed {
+  text-align: center;
+  padding: 0.75rem;
+  background: #171717;
+  border-radius: 8px;
+  color: #fff;
+}
+
+.points-needed .needed-value {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.points-needed .needed-label {
+  font-size: 0.75rem;
+  opacity: 0.8;
+}
+
+.points-needed.achieved {
+  background: #22C55E;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.points-needed.achieved svg {
+  width: 24px;
+  height: 24px;
+}
+
+/* Earn Points Section */
+.earn-points-section {
+  margin-bottom: 2rem;
+}
+
+.earn-points-section h2 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0 0 1rem;
+}
+
+.earn-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.earn-card {
+  background: #fff;
+  border: 1px solid #E5E5E5;
+  border-radius: 12px;
+  padding: 1.25rem;
+}
+
+.earn-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.earn-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.earn-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.earn-icon.attendance { background: #D1FAE5; color: #065F46; }
+.earn-icon.training { background: #DBEAFE; color: #1E40AF; }
+.earn-icon.rating { background: #FEF3C7; color: #92400E; }
+
+.earn-title {
+  display: flex;
+  flex-direction: column;
+}
+
+.earn-title .title {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.earn-title .weight {
+  font-size: 0.75rem;
+  color: #737373;
+}
+
+.earn-progress {
+  margin-bottom: 0.75rem;
+}
+
+.progress-bar {
+  height: 8px;
+  background: #E5E5E5;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 0.25rem;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #22C55E;
+  border-radius: 4px;
+  transition: width 0.3s;
+}
+
+.progress-fill.training { background: #3B82F6; }
+.progress-fill.rating { background: #F59E0B; }
+
+.progress-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: #737373;
+}
+
+.earn-score {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  border-top: 1px solid #F5F5F5;
+  border-bottom: 1px solid #F5F5F5;
+  margin-bottom: 0.75rem;
+}
+
+.earn-score .current {
+  font-weight: 600;
+  color: #171717;
+}
+
+.earn-score .max {
+  color: #737373;
+  font-size: 0.875rem;
+}
+
+.earn-tips {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.tip-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.tip-item svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.tip-item.positive { color: #065F46; }
+.tip-item.negative { color: #991B1B; }
+.tip-item.info { color: #525252; }
+
+/* Tier Requirements */
+.tier-requirements {
+  margin-bottom: 2rem;
+}
+
+.tier-requirements h2 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0 0 1rem;
+}
+
+.tier-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem;
+}
+
+.tier-card {
+  background: #fff;
+  border: 2px solid #E5E5E5;
+  border-radius: 12px;
+  padding: 1rem;
+  text-align: center;
+  transition: all 0.2s;
+}
+
+.tier-card.active {
+  border-color: #171717;
+  background: #F5F5F5;
+}
+
+.tier-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.tier-header svg {
+  width: 24px;
+  height: 24px;
+}
+
+.tier-header span {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.tier-header.excellent { color: #065F46; }
+.tier-header.good { color: #1E40AF; }
+.tier-header.average { color: #92400E; }
+.tier-header.needs_improvement { color: #991B1B; }
+
+.tier-requirement {
+  font-size: 0.75rem;
+  color: #737373;
+  margin-bottom: 0.5rem;
+}
+
+.tier-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: #065F46;
+  background: #D1FAE5;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+}
+
+.tier-check svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Action Suggestions */
+.action-section {
+  margin-bottom: 2rem;
+}
+
+.action-section h2 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0 0 1rem;
+}
+
+.suggestion-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.suggestion-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: #fff;
+  border: 1px solid #E5E5E5;
+  border-radius: 12px;
+}
+
+.suggestion-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.suggestion-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.suggestion-icon.attendance { background: #D1FAE5; color: #065F46; }
+.suggestion-icon.training { background: #DBEAFE; color: #1E40AF; }
+.suggestion-icon.rating { background: #FEF3C7; color: #92400E; }
+
+.suggestion-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.suggestion-title {
+  font-weight: 500;
+}
+
+.suggestion-desc {
+  font-size: 0.75rem;
+  color: #737373;
+}
+
+.suggestion-points {
+  padding: 0.5rem 1rem;
+  background: #171717;
+  color: #fff;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.875rem;
 }
 
 .score-circle {
@@ -764,6 +1449,24 @@ onMounted(() => {
 
   .tier-badge {
     margin-left: 0;
+    margin-top: 0.5rem;
+  }
+
+  .score-section {
+    flex-direction: column;
+  }
+
+  .tier-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .suggestion-item {
+    flex-wrap: wrap;
+  }
+
+  .suggestion-points {
+    width: 100%;
+    text-align: center;
     margin-top: 0.5rem;
   }
 }
