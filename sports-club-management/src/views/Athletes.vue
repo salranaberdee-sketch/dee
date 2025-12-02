@@ -4,6 +4,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useDataStore } from '@/stores/data'
 import Modal from '@/components/Modal.vue'
 import AthleteHistory from '@/components/AthleteHistory.vue'
+import AlbumSection from '@/components/AlbumSection.vue'
 
 const auth = useAuthStore()
 const data = useDataStore()
@@ -280,6 +281,14 @@ function calculateAge(birthDate) {
               </svg>
               ประวัติแข่งขัน
             </button>
+            <button :class="['tab', { active: activeTab === 'albums' }]" @click="activeTab = 'albums'">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <polyline points="21 15 16 10 5 21"/>
+              </svg>
+              อัลบั้มรูปภาพ
+            </button>
           </div>
 
           <!-- Info Tab -->
@@ -390,6 +399,23 @@ function calculateAge(birthDate) {
           <!-- History Tab -->
           <div v-if="activeTab === 'history'" class="tab-content">
             <AthleteHistory v-if="selectedAthlete" :athlete-id="selectedAthlete.id" />
+          </div>
+
+          <!-- Albums Tab -->
+          <div v-if="activeTab === 'albums'" class="tab-content">
+            <AlbumSection 
+              v-if="selectedAthlete?.user_id" 
+              :user-id="selectedAthlete.user_id" 
+              :read-only="true"
+            />
+            <div v-else class="empty-docs">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <polyline points="21 15 16 10 5 21"/>
+              </svg>
+              <p>ไม่พบข้อมูลอัลบั้ม</p>
+            </div>
           </div>
         </div>
       </template>

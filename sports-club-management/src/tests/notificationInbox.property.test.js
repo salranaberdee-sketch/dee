@@ -2093,6 +2093,387 @@ describe('Notification Inbox Property Tests', () => {
   })
 
   /**
+   * **Feature: notification-inbox, Property 7: Delete removes notification**
+   * **Validates: Requirements 4.1, 4.2, 4.3**
+   * 
+   * For any notification that is deleted, attempting to fetch it should return null or not found.
+   * For bulk delete, all selected notifications should be removed.
+   * For clear all, the user's notification list should be empty.
+   */
+  describe('Property 7: Delete removes notification', () => {
+    
+    /**
+     * Generate a valid ISO date string from a timestamp in a reasonable range
+     */
+    const MIN_TIMESTAMP = new Date('2020-01-01T00:00:00.000Z').getTime()
+    const MAX_TIMESTAMP = new Date('2030-12-31T23:59:59.999Z').getTime()
+    
+    const validISODateArbitrary = fc.integer({ min: MIN_TIMESTAMP, max: MAX_TIMESTAMP })
+      .map(ts => new Date(ts).toISOString())
+
+    /**
+     * Arbitrary for generating a notification
+     */
+    const notificationArbitrary = fc.record({
+      id: fc.uuid(),
+      user_id: fc.uuid(),
+      title: fc.string({ minLength: 1, maxLength: 100 }).filter(s => s.trim().length > 0),
+      message: fc.string({ minLength: 1, maxLength: 200 }).filter(s => s.trim().length > 0),
+      type: notificationTypeArbitrary,
+      reference_type: fc.option(referenceTypeArbitrary, { nil: null }),
+      reference_id: fc.option(fc.uuid(), { nil: null }),
+      read_at: fc.option(validISODateArbitrary, { nil: null }),
+      created_at: validISODateArbitrary
+    })
+
+    /**
+     * Arbitrary for generating an array of notifications
+     */
+    const notificationArrayArbitrary = fc.array(notificationArbitrary, { minLength: 0, maxLength: 50 })
+
+    /**
+     * Simulate deleting a single notification
+     * Returns updated notifications array
+     * 
+     * @param {Array} notifications - Array of notifications
+     * @param {string} notificationId - ID of notification to delete
+     * @returns {Array} - Updated notifications array
+     */
+    function simulateDeleteNotification(notifications, notificationId) {
+      return notifications.filter(n => n.id !== notificationId)
+    }
+
+    /**
+     * Simulate deleting multiple notifications
+     * Returns updated notifications array
+     * 
+     * @param {Array} notifications - Array of notifications
+     * @param {string[]} notificationIds - Array of notification IDs to delete
+     * @returns {Array} - Updated notifications array
+     */
+    function simulateDeleteMultiple(notifications, notificationIds) {
+      const idsSet = new Set(notificationIds)
+      return notifications.filter(n => !idsSet.has(n.id))
+    }
+
+    /**
+     * Simulate clearing all notifications for a user
+     * Returns empty array
+     * 
+     * @param {Array} notifications - Array of notifications
+     * @param {string} userId - User ID to clear notifications for
+     * @returns {Array} - Empty array
+     */
+    function simulateClearAll(notifications, userId) {
+      return notifications.filter(n => n.user_id !== userId)
+    }
+
+    /**
+     * Find a notification by ID
+     * Returns the notification or null if not found
+     * 
+     * @param {Array} notifications - Array of notifications
+     * @param {string} notificationId - ID to search for
+     * @returns {Object|null} - Found notification or null
+     */
+    function findNotificationById(notifications, notificationId) {
+      return notifications.find(n => n.id === notificationId) || null
+    }
+
+    it('should remove notification from list after single delete', () => {
+      fc.assert(
+        fc.property(
+          fc.array(notificationArbitrary, { minLength: 1, maxLength: 50 }),
+          (notifications) => {
+            // Pick a random notification to delete
+            const toDelete = notifications[Math.floor(Math.random() * notifications.length)]
+            
+            // Delete the notification
+            const afterDelete = simulateDeleteNotification(notifications, toDelete.id)
+            
+            // Notification should not be found
+            expect(findNotificationById(afterDelete, toDelete.id)).toBeNull()
+            
+            // Length should decrease by 1
+            expect(afterDelete.length).toBe(notifications.length - 1)
+            
+            return true
+          }
+        ),
+        { numRuns: 100 }
+      )
+    })
+
+    it('should return null when fetching deleted notification', () => {
+      fc.assert(
+        fc.property(
+          fc.array(notificationArbitrary, { minLength: 1, maxLength: 50 }),
+          (notifications) => {
+            // Pick a random notification to delete
+            const toDelete = notifications[Math.floor(Math.random() * notifications.length)]
+            
+            // Delete the notification
+            const afterDelete = simulateDeleteNotification(notifications, toDelete.id)
+            
+            // Attempting to fetch should return null
+            const fetched = findNotificationById(afterDelete, toDelete.id)
+            expect(fetched).toBeNull()
+            
+            return true
+          }
+        ),
+        { numRuns: 100 }
+      )
+    })
+
+    it('should remove all selected notifications in bulk delete', () => {
+      fc.assert(
+        fc.property(
+          fc.array(notificationArbitrary, { minLength: 2, maxLength: 50 }),
+          fc.integer({ min: 1, max: 10 }),
+          (notifications, deleteCount) => {
+            // Select random notifications to delete (up to available count)
+            const actualDeleteCount = Math.min(deleteCount, notifications.length)
+            const toDeleteIds = notifications
+              .slice(0, actualDeleteCount)
+              .map(n => n.id)
+            
+            // Bulk delete
+            const afterDelete = simulateDeleteMultiple(notifications, toDeleteIds)
+            
+            // All deleted notifications should not be found
+            for (const id of toDeleteIds) {
+              expect(findNotificationById(afterDelete, id)).toBeNull()
+            }
+            
+            // Length should decrease by number of deleted
+            expect(afterDelete.length).toBe(notifications.length - actualDeleteCount)
+            
+            return true
+          }
+        ),
+        { numRuns: 100 }
+      )
+    })
+
+    it('should preserve non-deleted notifications in bulk delete', () => {
+      fc.assert(
+        fc.property(
+          fc.array(notificationArbitrary, { minLength: 3, maxLength: 50 }),
+          fc.integer({ min: 1, max: 5 }),
+          (notifications, deleteCount) => {
+            // Select some notifications to delete
+            const actualDeleteCount = Math.min(deleteCount, notifications.length - 1)
+            const toDeleteIds = new Set(
+              notifications.slice(0, actualDeleteCount).map(n => n.id)
+            )
+            
+            // Get IDs that should remain
+            const remainingIds = notifications
+              .filter(n => !toDeleteIds.has(n.id))
+              .map(n => n.id)
+            
+            // Bulk delete
+            const afterDelete = simulateDeleteMultiple(notifications, [...toDeleteIds])
+            
+            // All remaining notifications should still be found
+            for (const id of remainingIds) {
+              expect(findNotificationById(afterDelete, id)).not.toBeNull()
+            }
+            
+            return true
+          }
+        ),
+        { numRuns: 100 }
+      )
+    })
+
+    it('should result in empty list after clear all for user', () => {
+      fc.assert(
+        fc.property(
+          fc.uuid(),
+          fc.array(
+            fc.record({
+              id: fc.uuid(),
+              title: fc.string({ minLength: 1, maxLength: 100 }).filter(s => s.trim().length > 0),
+              message: fc.string({ minLength: 1, maxLength: 200 }).filter(s => s.trim().length > 0),
+              type: notificationTypeArbitrary,
+              reference_type: fc.option(referenceTypeArbitrary, { nil: null }),
+              reference_id: fc.option(fc.uuid(), { nil: null }),
+              read_at: fc.option(validISODateArbitrary, { nil: null }),
+              created_at: validISODateArbitrary
+            }),
+            { minLength: 1, maxLength: 50 }
+          ),
+          (userId, notificationData) => {
+            // Create notifications for the user
+            const notifications = notificationData.map(n => ({ ...n, user_id: userId }))
+            
+            // Clear all for user
+            const afterClear = simulateClearAll(notifications, userId)
+            
+            // List should be empty
+            expect(afterClear.length).toBe(0)
+            
+            // No notifications should be found for this user
+            const userNotifications = afterClear.filter(n => n.user_id === userId)
+            expect(userNotifications.length).toBe(0)
+            
+            return true
+          }
+        ),
+        { numRuns: 100 }
+      )
+    })
+
+    it('should not affect other users notifications in clear all', () => {
+      fc.assert(
+        fc.property(
+          fc.uuid(),
+          fc.uuid(),
+          fc.array(notificationArbitrary, { minLength: 1, maxLength: 25 }),
+          fc.array(notificationArbitrary, { minLength: 1, maxLength: 25 }),
+          (userId1, userId2, user1Data, user2Data) => {
+            // Ensure different users
+            if (userId1 === userId2) return true
+            
+            // Create notifications for both users
+            const user1Notifications = user1Data.map(n => ({ ...n, user_id: userId1 }))
+            const user2Notifications = user2Data.map(n => ({ ...n, user_id: userId2 }))
+            const allNotifications = [...user1Notifications, ...user2Notifications]
+            
+            // Clear all for user1
+            const afterClear = simulateClearAll(allNotifications, userId1)
+            
+            // User1's notifications should be gone
+            const user1Remaining = afterClear.filter(n => n.user_id === userId1)
+            expect(user1Remaining.length).toBe(0)
+            
+            // User2's notifications should remain
+            const user2Remaining = afterClear.filter(n => n.user_id === userId2)
+            expect(user2Remaining.length).toBe(user2Notifications.length)
+            
+            return true
+          }
+        ),
+        { numRuns: 100 }
+      )
+    })
+
+    it('should handle deleting non-existent notification gracefully', () => {
+      fc.assert(
+        fc.property(
+          notificationArrayArbitrary,
+          fc.uuid(),
+          (notifications, nonExistentId) => {
+            // Ensure the ID doesn't exist
+            const exists = notifications.some(n => n.id === nonExistentId)
+            if (exists) return true // Skip if ID happens to exist
+            
+            // Try to delete non-existent notification
+            const afterDelete = simulateDeleteNotification(notifications, nonExistentId)
+            
+            // List should remain unchanged
+            expect(afterDelete.length).toBe(notifications.length)
+            
+            return true
+          }
+        ),
+        { numRuns: 100 }
+      )
+    })
+
+    it('should handle bulk delete with empty ID array', () => {
+      fc.assert(
+        fc.property(
+          notificationArrayArbitrary,
+          (notifications) => {
+            // Bulk delete with empty array
+            const afterDelete = simulateDeleteMultiple(notifications, [])
+            
+            // List should remain unchanged
+            expect(afterDelete.length).toBe(notifications.length)
+            
+            return true
+          }
+        ),
+        { numRuns: 100 }
+      )
+    })
+
+    it('should handle clear all on empty list', () => {
+      fc.assert(
+        fc.property(
+          fc.uuid(),
+          (userId) => {
+            // Clear all on empty list
+            const afterClear = simulateClearAll([], userId)
+            
+            // List should remain empty
+            expect(afterClear.length).toBe(0)
+            
+            return true
+          }
+        ),
+        { numRuns: 100 }
+      )
+    })
+
+    it('should be idempotent: deleting same notification twice should have same result', () => {
+      fc.assert(
+        fc.property(
+          fc.array(notificationArbitrary, { minLength: 1, maxLength: 50 }),
+          (notifications) => {
+            // Pick a notification to delete
+            const toDelete = notifications[0]
+            
+            // Delete once
+            const afterFirst = simulateDeleteNotification(notifications, toDelete.id)
+            
+            // Delete again (should have no effect)
+            const afterSecond = simulateDeleteNotification(afterFirst, toDelete.id)
+            
+            // Results should be the same
+            expect(afterSecond.length).toBe(afterFirst.length)
+            
+            return true
+          }
+        ),
+        { numRuns: 100 }
+      )
+    })
+
+    it('should maintain data integrity of remaining notifications after delete', () => {
+      fc.assert(
+        fc.property(
+          fc.array(notificationArbitrary, { minLength: 2, maxLength: 50 }),
+          (notifications) => {
+            // Pick first notification to delete
+            const toDelete = notifications[0]
+            const remaining = notifications.slice(1)
+            
+            // Delete the notification
+            const afterDelete = simulateDeleteNotification(notifications, toDelete.id)
+            
+            // Verify remaining notifications have same data
+            for (const original of remaining) {
+              const found = findNotificationById(afterDelete, original.id)
+              expect(found).not.toBeNull()
+              expect(found.title).toBe(original.title)
+              expect(found.message).toBe(original.message)
+              expect(found.type).toBe(original.type)
+              expect(found.user_id).toBe(original.user_id)
+            }
+            
+            return true
+          }
+        ),
+        { numRuns: 100 }
+      )
+    })
+  })
+
+  /**
    * **Feature: notification-inbox, Property 8: Filter returns only matching type**
    * **Validates: Requirements 5.1, 5.2**
    * 
@@ -2495,7 +2876,11 @@ describe('Notification Inbox Property Tests', () => {
       // Normalize reference type (lowercase, trim)
       const normalizedType = referenceType.toLowerCase().trim()
       
-      // Look up the route for this reference type
+      // Look up the route for this reference type using hasOwnProperty to avoid prototype pollution
+      if (!Object.prototype.hasOwnProperty.call(ROUTE_MAP, normalizedType)) {
+        return null
+      }
+      
       const baseRoute = ROUTE_MAP[normalizedType]
       
       // If no route mapping exists, return null

@@ -53,6 +53,8 @@ export const useDataStore = defineStore('data', () => {
   const tournamentParticipants = ref([])
   const tournamentMatches = ref([])
   const tournamentAwards = ref([])
+  const userAlbums = ref([])
+  const albumMedia = ref([])
   const loading = ref(false)
   const error = ref(null)
 
@@ -1447,6 +1449,384 @@ export const useDataStore = defineStore('data', () => {
     clubApplications.value.filter(a => a.status === 'pending').length
   )
 
+  // ============ USER ALBUMS ============
+  // Requirements: 1.2, 1.3, 1.4, 3.4
+
+  /**
+   * Fetch all albums for a user, sorted by updated_at desc
+   * @param {string} userId - User ID
+   * @returns {Promise<Array>} Albums array
+   */
+  async function fetchUserAlbums(userId) {
+    loading.value = true
+    const { data, error: err } = await supabase
+      .from('user_albums')
+      .select('*')
+      .eq('user_id', userId)
+      .order('updated_at', { ascending: false })
+    
+    if (!err) userAlbums.value = data || []
+    else error.value = err.message
+    loading.value = false
+    return userAlbums.value
+  }
+
+  /**
+   * Create a new album with validation
+   * @param {Object} albumData - Album data { user_id, name, description?, album_type? }
+   * @returns {Promise<{success: boolean, data?: Object, message?: string}>}
+   */
+  async function createAlbum(albumData) {
+    // Validate name is not empty or whitespace-only (Requirement 1.5)
+    if (!albumData.name || albumData.name.trim() === '') {
+      return { success: false, message: 'กรุณาระบุชื่ออัลบั้ม' }
+    }
+
+    const payload = {
+      user_id: albumData.user_id,
+      name: albumData.name.trim(),
+      description: albumData.description?.trim() || null,
+      album_type: albumData.album_type || 'general',
+      cover_image_url: albumData.cover_image_url || null
+    }
+
+    const { data, error: err } = await supabase
+      .from('user_albums')
+      .insert(payload)
+      .select()
+      .single()
+    
+    if (!err && data) {
+      userAlbums.value.unshift(data)
+      return { success: true, data }
+    }
+    return { success: false, message: err?.message }
+  }
+
+  /**
+   * Update an existing album
+   * @param {string} albumId - Album ID
+   * @param {Object} albumData - Updated album data
+   * @returns {Promise<{success: boolean, message?: string}>}
+   */
+  async function updateAlbum(albumId, albumData) {
+    // Validate name if provided
+    if (albumData.name !== undefined && (!albumData.name || albumData.name.trim() === '')) {
+      return { success: false, message: 'กรุณาระบุชื่ออัลบั้ม' }
+    }
+
+    const updates = {
+      updated_at: new Date().toISOString()
+    }
+    
+    if (albumData.name !== undefined) updates.name = albumData.name.trim()
+    if (albumData.description !== undefined) updates.description = albumData.description?.trim() || null
+    if (albumData.album_type !== undefined) updates.album_type = albumData.album_type
+    if (albumData.cover_image_url !== undefined) updates.cover_image_url = albumData.cover_image_url
+
+    const { data, error: err } = await supabase
+      .from('user_albums')
+      .update(updates)
+      .eq('id', albumId)
+      .select()
+      .single()
+    
+    if (!err && data) {
+      const idx = userAlbums.value.findIndex(a => a.id === albumId)
+      if (idx !== -1) userAlbums.value[idx] = data
+      // Re-sort by updated_at
+      userAlbums.value.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))
+      return { success: true, data }
+    }
+    return { success: false, message: err?.message }
+  }
+
+  /**
+   * Delete an album and cascade delete all associated media
+   * @param {string} albumId - Album ID
+   * @returns {Promise<{success: boolean, message?: string}>}
+   */
+  async function deleteAlbum(albumId) {
+    // First, get all media items for this album to delete from storage
+    const { data: mediaItems } = await supabase
+      .from('album_media')
+      .select('id, file_url')
+      .eq('album_id', albumId)
+    
+    // Delete files from storage
+    if (mediaItems && mediaItems.length > 0) {
+      const filePaths = mediaItems.map(m => {
+        // Extract path from URL: profile-albums/{user_id}/{album_id}/{filename}
+        const url = new URL(m.file_url)
+        const pathMatch = url.pathname.match(/\/storage\/v1\/object\/public\/profile-albums\/(.+)/)
+        return pathMatch ? pathMatch[1] : null
+      }).filter(Boolean)
+      
+      if (filePaths.length > 0) {
+        await supabase.storage.from('profile-albums').remove(filePaths)
+      }
+    }
+    
+    // Delete album (cascade will delete album_media records)
+    const { error: err } = await supabase
+      .from('user_albums')
+      .delete()
+      .eq('id', albumId)
+    
+    if (!err) {
+      userAlbums.value = userAlbums.value.filter(a => a.id !== albumId)
+      // Also clear albumMedia if it was for this album
+      albumMedia.value = albumMedia.value.filter(m => m.album_id !== albumId)
+      return { success: true }
+    }
+    return { success: false, message: err?.message }
+  }
+
+  /**
+   * Get album by ID
+   * @param {string} albumId - Album ID
+   * @returns {Object|undefined} Album object
+   */
+  function getAlbumById(albumId) {
+    return userAlbums.value.find(a => a.id === albumId)
+  }
+
+  /**
+   * Get albums filtered by type
+   * @param {string} userId - User ID
+   * @param {string} albumType - Album type (competition, training, documents, general)
+   * @returns {Array} Filtered albums
+   */
+  function getAlbumsByType(userId, albumType) {
+    return userAlbums.value.filter(a => a.user_id === userId && a.album_type === albumType)
+  }
+
+  // ============ ALBUM MEDIA ============
+  // Requirements: 2.2, 2.3, 2.4, 2.5, 3.3
+
+  // Allowed file types and max size
+  const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
+  const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+
+  /**
+   * Validate file type and size
+   * @param {File} file - File to validate
+   * @returns {{valid: boolean, error?: string}}
+   */
+  function validateFile(file) {
+    if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+      return { valid: false, error: 'รองรับเฉพาะไฟล์ JPG, PNG, WebP หรือ PDF' }
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      return { valid: false, error: 'ไฟล์ต้องไม่เกิน 10MB' }
+    }
+    return { valid: true }
+  }
+
+  /**
+   * Fetch all media items for an album
+   * @param {string} albumId - Album ID
+   * @returns {Promise<Array>} Media items array
+   */
+  async function fetchAlbumMedia(albumId) {
+    loading.value = true
+    const { data, error: err } = await supabase
+      .from('album_media')
+      .select('*')
+      .eq('album_id', albumId)
+      .order('uploaded_at', { ascending: false })
+    
+    if (!err) albumMedia.value = data || []
+    else error.value = err.message
+    loading.value = false
+    return albumMedia.value
+  }
+
+  /**
+   * Upload media file to album
+   * @param {string} albumId - Album ID
+   * @param {File} file - File to upload
+   * @returns {Promise<{success: boolean, data?: Object, message?: string}>}
+   */
+  async function uploadMedia(albumId, file) {
+    // Validate file (Requirements 2.2, 2.3)
+    const validation = validateFile(file)
+    if (!validation.valid) {
+      return { success: false, message: validation.error }
+    }
+
+    // Get album to get user_id
+    let album = userAlbums.value.find(a => a.id === albumId)
+    if (!album) {
+      // Try to fetch from DB
+      const { data: albumData } = await supabase
+        .from('user_albums')
+        .select('user_id')
+        .eq('id', albumId)
+        .single()
+      
+      if (!albumData) {
+        return { success: false, message: 'ไม่พบอัลบั้ม' }
+      }
+      album = albumData
+    }
+
+    const userId = album.user_id
+
+    // Check storage quota before upload (Requirement 6.2)
+    const quotaCheck = await checkStorageQuota(userId)
+    if (!quotaCheck.canUpload) {
+      return { success: false, message: 'พื้นที่เก็บข้อมูลเต็ม กรุณาลบไฟล์เก่าก่อน' }
+    }
+
+    // Generate unique filename
+    const fileExt = file.name.split('.').pop()
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
+    const storagePath = `${userId}/${albumId}/${fileName}`
+
+    // Upload to Supabase Storage (Requirement 2.4)
+    const { data: uploadData, error: uploadErr } = await supabase.storage
+      .from('profile-albums')
+      .upload(storagePath, file)
+    
+    if (uploadErr) {
+      return { success: false, message: 'เกิดข้อผิดพลาดในการอัปโหลด กรุณาลองใหม่' }
+    }
+
+    // Get public URL
+    const { data: urlData } = supabase.storage
+      .from('profile-albums')
+      .getPublicUrl(storagePath)
+
+    // Create database record (Requirement 2.5)
+    const mediaRecord = {
+      album_id: albumId,
+      user_id: userId,
+      file_url: urlData.publicUrl,
+      file_name: file.name,
+      file_type: file.type,
+      file_size: file.size,
+      thumbnail_url: file.type.startsWith('image/') ? urlData.publicUrl : null
+    }
+
+    const { data, error: err } = await supabase
+      .from('album_media')
+      .insert(mediaRecord)
+      .select()
+      .single()
+    
+    if (!err && data) {
+      albumMedia.value.unshift(data)
+      
+      // Update album's updated_at timestamp
+      await supabase
+        .from('user_albums')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', albumId)
+      
+      return { success: true, data }
+    }
+
+    // If DB insert failed, try to clean up storage
+    await supabase.storage.from('profile-albums').remove([storagePath])
+    return { success: false, message: err?.message || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล' }
+  }
+
+  /**
+   * Delete media item from storage and database
+   * @param {string} mediaId - Media ID
+   * @returns {Promise<{success: boolean, message?: string}>}
+   */
+  async function deleteMedia(mediaId) {
+    // Get media record first
+    const media = albumMedia.value.find(m => m.id === mediaId)
+    let fileUrl = media?.file_url
+
+    if (!fileUrl) {
+      const { data: mediaData } = await supabase
+        .from('album_media')
+        .select('file_url, album_id')
+        .eq('id', mediaId)
+        .single()
+      
+      if (!mediaData) {
+        return { success: false, message: 'ไม่พบไฟล์' }
+      }
+      fileUrl = mediaData.file_url
+    }
+
+    // Extract storage path from URL
+    const url = new URL(fileUrl)
+    const pathMatch = url.pathname.match(/\/storage\/v1\/object\/public\/profile-albums\/(.+)/)
+    const storagePath = pathMatch ? pathMatch[1] : null
+
+    // Delete from storage (Requirement 3.3)
+    if (storagePath) {
+      await supabase.storage.from('profile-albums').remove([storagePath])
+    }
+
+    // Delete from database (Requirement 3.3)
+    const { error: err } = await supabase
+      .from('album_media')
+      .delete()
+      .eq('id', mediaId)
+    
+    if (!err) {
+      albumMedia.value = albumMedia.value.filter(m => m.id !== mediaId)
+      return { success: true }
+    }
+    return { success: false, message: err?.message }
+  }
+
+  /**
+   * Get media item by ID
+   * @param {string} mediaId - Media ID
+   * @returns {Object|undefined} Media object
+   */
+  function getMediaById(mediaId) {
+    return albumMedia.value.find(m => m.id === mediaId)
+  }
+
+  // ============ STORAGE STATISTICS ============
+  // Requirements: 6.2, 6.3
+
+  const STORAGE_QUOTA_BYTES = 100 * 1024 * 1024 // 100MB per user
+
+  /**
+   * Get storage statistics for a user
+   * @param {string} userId - User ID
+   * @returns {Promise<{totalFiles: number, totalSize: number, quotaUsedPercent: number}>}
+   */
+  async function getUserStorageStats(userId) {
+    const { data, error: err } = await supabase
+      .from('album_media')
+      .select('file_size')
+      .eq('user_id', userId)
+    
+    if (err) {
+      return { totalFiles: 0, totalSize: 0, quotaUsedPercent: 0 }
+    }
+
+    const totalFiles = data?.length || 0
+    const totalSize = data?.reduce((sum, m) => sum + (m.file_size || 0), 0) || 0
+    const quotaUsedPercent = Math.round((totalSize / STORAGE_QUOTA_BYTES) * 100)
+
+    return { totalFiles, totalSize, quotaUsedPercent }
+  }
+
+  /**
+   * Check if user can upload more files (quota check)
+   * @param {string} userId - User ID
+   * @returns {Promise<{canUpload: boolean, remainingBytes: number}>}
+   */
+  async function checkStorageQuota(userId) {
+    const stats = await getUserStorageStats(userId)
+    const remainingBytes = STORAGE_QUOTA_BYTES - stats.totalSize
+    const canUpload = remainingBytes > 0
+
+    return { canUpload, remainingBytes }
+  }
+
   // ============ STATS ============
   const stats = computed(() => ({
     totalClubs: clubs.value.length,
@@ -1498,6 +1878,7 @@ export const useDataStore = defineStore('data', () => {
     clubs, coaches, athletes, schedules, trainingLogs, announcements, events, notifications,
     tournaments, tournamentParticipants, tournamentMatches, tournamentAwards,
     clubApplications, pendingApplicationsCount,
+    userAlbums, albumMedia,
     unreadNotificationsCount,
     loading, error, stats, upcomingSchedules,
     
@@ -1544,6 +1925,16 @@ export const useDataStore = defineStore('data', () => {
     fetchNotifications, markNotificationRead, markAllNotificationsRead,
     deleteNotification, clearAllNotifications,
     subscribeToNotifications, unsubscribeFromNotifications, createNotification,
+    
+    // User Albums (Profile Album)
+    fetchUserAlbums, createAlbum, updateAlbum, deleteAlbum, getAlbumById, getAlbumsByType,
+    
+    // Album Media
+    fetchAlbumMedia, uploadMedia, deleteMedia, getMediaById, validateFile,
+    ALLOWED_MIME_TYPES, MAX_FILE_SIZE,
+    
+    // Storage Statistics
+    getUserStorageStats, checkStorageQuota, STORAGE_QUOTA_BYTES,
     
     // Utils
     initData, exportData

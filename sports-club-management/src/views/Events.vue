@@ -759,21 +759,25 @@ function getEventTypeColor(type) {
         <div 
           v-for="(day, idx) in calendarDays" 
           :key="idx" 
-          :class="['calendar-day', { 'other-month': !day.isCurrentMonth, 'today': isToday(day.date) }]"
+          :class="['calendar-day', { 'other-month': !day.isCurrentMonth, 'today': isToday(day.date), 'has-events': day.events.length > 0 }]"
+          @click="day.events.length === 1 ? openDetail(day.events[0]) : null"
         >
           <span class="day-number">{{ day.date.getDate() }}</span>
           <div class="day-events">
             <div 
-              v-for="event in day.events.slice(0, 2)" 
+              v-for="event in day.events.slice(0, 3)" 
               :key="event.id" 
               class="day-event"
               :style="{ borderLeftColor: getEventTypeColor(event.event_type) }"
-              @click="openDetail(event)"
+              @click.stop="openDetail(event)"
+              :title="event.title + ' - ' + formatTime(event.start_time)"
             >
-              {{ event.title }}
+              <span class="event-time">{{ formatTime(event.start_time) }}</span>
+              <span class="event-name">{{ event.title }}</span>
             </div>
-            <div v-if="day.events.length > 2" class="more-events">+{{ day.events.length - 2 }} อื่นๆ</div>
+            <div v-if="day.events.length > 3" class="more-events" @click.stop>+{{ day.events.length - 3 }} อื่นๆ</div>
           </div>
+          <div v-if="day.events.length > 0" class="day-event-count">{{ day.events.length }}</div>
         </div>
       </div>
     </div>
@@ -1288,10 +1292,14 @@ function getEventTypeColor(type) {
 .calendar-day.today { background: #f0f9ff; }
 .calendar-day.today .day-number { background: #171717; color: #fff; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; }
 .day-number { font-size: 0.75rem; font-weight: 500; color: #171717; margin-bottom: 0.25rem; }
-.day-events { display: flex; flex-direction: column; gap: 2px; }
-.day-event { font-size: 0.625rem; padding: 2px 4px; background: #f5f5f5; border-radius: 2px; border-left: 2px solid #171717; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.day-events { display: flex; flex-direction: column; gap: 2px; flex: 1; overflow: hidden; }
+.day-event { font-size: 0.625rem; padding: 2px 4px; background: #f5f5f5; border-radius: 2px; border-left: 3px solid #171717; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; display: flex; align-items: center; gap: 4px; }
 .day-event:hover { background: #e5e5e5; }
-.more-events { font-size: 0.625rem; color: #737373; }
+.day-event .event-time { font-weight: 600; color: #525252; flex-shrink: 0; }
+.day-event .event-name { overflow: hidden; text-overflow: ellipsis; }
+.more-events { font-size: 0.625rem; color: #737373; cursor: pointer; }
+.more-events:hover { color: #171717; }
+.day-event-count { display: none; }
 
 /* Section */
 .section { margin-bottom: 2rem; }
@@ -1511,10 +1519,13 @@ function getEventTypeColor(type) {
   .toolbar { flex-direction: column; align-items: stretch; }
   .search-box { max-width: none; }
   .event-grid { grid-template-columns: 1fr; }
-  .calendar-day { min-height: 60px; padding: 0.25rem; }
-  .day-event { display: none; }
-  .day-events { position: relative; }
-  .calendar-day.has-events::after { content: ''; position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); width: 6px; height: 6px; background: #171717; border-radius: 50%; }
+  .calendar-day { min-height: 70px; padding: 0.25rem; position: relative; cursor: pointer; }
+  .calendar-day.has-events { background: #fafafa; }
+  .day-event { font-size: 0.5rem; padding: 1px 3px; }
+  .day-event .event-time { display: none; }
+  .day-events { gap: 1px; }
+  .more-events { font-size: 0.5rem; }
+  .day-event-count { display: flex; position: absolute; top: 2px; right: 2px; width: 16px; height: 16px; background: #171717; color: #fff; border-radius: 50%; font-size: 0.625rem; font-weight: 600; align-items: center; justify-content: center; }
   
   /* Detail Modal Responsive */
   .detail-cards { grid-template-columns: 1fr; }

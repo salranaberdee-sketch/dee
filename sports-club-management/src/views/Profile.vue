@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useDataStore } from '@/stores/data'
 import { supabase } from '@/lib/supabase'
 import AthleteHistory from '@/components/AthleteHistory.vue'
+import AlbumSection from '@/components/AlbumSection.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -535,6 +536,14 @@ const filteredMenu = computed(() => menuItems.filter(item => item.roles.includes
             </div>
           </div>
         </div>
+
+        <!-- Albums Section (All users) -->
+        <AlbumSection 
+          v-if="auth.user?.id" 
+          :user-id="auth.user.id" 
+          :read-only="false"
+          class="section"
+        />
 
         <!-- Menu Section -->
         <div v-if="filteredMenu.length" class="section">

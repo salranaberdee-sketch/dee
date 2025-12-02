@@ -29,6 +29,7 @@ const routes = [
   { path: '/notifications', name: 'NotificationInbox', component: () => import('@/views/NotificationInbox.vue'), meta: { requiresAuth: true } },
   { path: '/notification-settings', name: 'NotificationSettings', component: () => import('@/views/NotificationSettings.vue'), meta: { requiresAuth: true } },
   { path: '/profile', name: 'Profile', component: () => import('@/views/Profile.vue'), meta: { requiresAuth: true } },
+  { path: '/profile/albums/:albumId', name: 'AlbumDetail', component: () => import('@/views/AlbumDetail.vue'), meta: { requiresAuth: true } },
 ]
 
 const router = createRouter({ history: createWebHistory(), routes })

@@ -1,0 +1,107 @@
+# Implementation Plan
+
+## Profile Album Feature
+
+- [x] 1. Database Setup
+  - [x] 1.1 Create migration for user_albums and album_media tables
+    - Create `user_albums` table with id, user_id, name, description, album_type, cover_image_url, created_at, updated_at
+    - Create `album_media` table with id, album_id, user_id, file_url, file_name, file_type, file_size, thumbnail_url, uploaded_at
+    - Add indexes for user_id and album_id
+    - _Requirements: 1.3, 2.5_
+  - [x] 1.2 Create RLS policies for user_albums table
+    - Users can CRUD their own albums
+    - Coaches can SELECT albums of athletes in their club
+    - _Requirements: 5.1, 5.3_
+  - [x] 1.3 Create RLS policies for album_media table
+    - Users can CRUD their own media
+    - Coaches can SELECT media of athletes in their club
+    - _Requirements: 5.1, 5.3_
+  - [x] 1.4 Create Supabase Storage bucket 'profile-albums'
+    - Configure storage policies for user access
+    - _Requirements: 2.4_
+
+- [x] 2. Store Functions (data.js)
+  - [x] 2.1 Implement album CRUD functions
+    - `fetchUserAlbums(userId)` - fetch albums sorted by updated_at desc
+    - `createAlbum(albumData)` - create new album with validation
+    - `updateAlbum(albumId, albumData)` - update album
+    - `deleteAlbum(albumId)` - delete album and cascade media
+    - _Requirements: 1.2, 1.3, 1.4, 3.4_
+  - [x] 2.2 Write property test for album creation and sorting
+    - **Property 1: Album creation requires valid name and stores complete data**
+    - **Property 2: Albums are sorted by most recently updated**
+    - **Validates: Requirements 1.2, 1.3, 1.4, 1.5**
+  - [x] 2.3 Implement media upload and management functions
+    - `fetchAlbumMedia(albumId)` - fetch media items for album
+    - `uploadMedia(albumId, file)` - validate and upload file
+    - `deleteMedia(mediaId)` - delete media from storage and DB
+    - _Requirements: 2.2, 2.3, 2.4, 2.5, 3.3_
+  - [x] 2.4 Write property test for file validation
+    - **Property 3: File upload validation accepts only allowed types and sizes**
+    - **Validates: Requirements 2.2, 2.3**
+  - [x] 2.5 Write property test for upload and deletion
+    - **Property 4: Uploaded media creates correct storage path and database record**
+    - **Property 5: Media deletion removes both storage file and database record**
+    - **Property 6: Album deletion cascades to all associated media**
+    - **Validates: Requirements 2.4, 2.5, 3.3, 3.4**
+  - [x] 2.6 Implement storage statistics functions
+    - `getUserStorageStats(userId)` - calculate total files and storage used
+    - `checkStorageQuota(userId)` - check if user can upload more
+    - _Requirements: 6.2, 6.3_
+  - [x] 2.7 Write property test for storage quota and statistics
+    - **Property 10: Storage quota enforcement**
+    - **Property 11: Storage statistics accuracy**
+    - **Validates: Requirements 6.2, 6.3**
+
+- [x] 3. Checkpoint - Ensure all tests pass
+  - Ensure all tests pass, ask the user if questions arise.
+
+- [x] 4. UI Components
+  - [x] 4.1 Create AlbumSection.vue component
+    - Display albums grid in Profile page
+    - Create album modal with name and description
+    - Show album cover thumbnail and item count
+    - _Requirements: 1.1, 1.2_
+  - [x] 4.2 Create AlbumDetail.vue component
+    - Display media items in grid layout
+    - Upload button with file picker
+    - Full-size image preview modal
+    - Delete media/album functionality
+    - _Requirements: 2.1, 3.1, 3.2, 3.3, 3.4, 3.5_
+  - [x] 4.3 Create MediaPicker.vue component
+    - Reusable component for selecting media from albums
+    - Support filtering by album type
+    - Return selected file URL
+    - _Requirements: 4.1, 4.2, 4.3, 4.4_
+  - [x] 4.4 Write property test for media picker and filtering
+    - **Property 7: Media picker returns valid file URL**
+    - **Property 8: Album filtering returns only matching types**
+    - **Validates: Requirements 4.3, 4.4**
+
+- [x] 5. Integration with Profile Page
+  - [x] 5.1 Add AlbumSection to Profile.vue
+    - Add new section after Documents section
+    - Show for all user roles
+    - _Requirements: 1.1_
+  - [x] 5.2 Add route for album detail view
+    - Route: /profile/albums/:albumId
+    - _Requirements: 3.1_
+  - [x] 5.3 Implement coach view for athlete albums
+    - Read-only mode when viewing other user's albums
+    - Hide edit/delete buttons for coaches
+    - _Requirements: 5.1, 5.2_
+  - [x] 5.4 Write property test for coach access control
+    - **Property 9: Coach access control for athlete albums**
+    - **Validates: Requirements 5.1, 5.3**
+
+- [x] 6. Admin Features
+  - [x] 6.1 Add storage usage display in admin view
+    - Show total files and storage used per user
+    - _Requirements: 6.1, 6.3_
+  - [x] 6.2 Implement quota exceeded notification
+    - Show warning when approaching quota
+    - Block uploads when quota exceeded
+    - _Requirements: 6.2_
+
+- [x] 7. Final Checkpoint - Ensure all tests pass
+  - Ensure all tests pass, ask the user if questions arise.

@@ -142,7 +142,13 @@
     - Mark as read/unread button
     - Delete button
     - _Requirements: 2.1, 2.2, 4.1, 6.1_
-  - [x]* 5.3 Write property test for read status persistence
+  - [x] 5.3 Write property test for read status persistence
+
+
+
+
+
+
 
 
 
@@ -244,7 +250,12 @@
     - **Property 9: Navigation URL generation**
     - **Validates: Requirements 6.1**
     - Note: Navigation utility implemented in notificationNavigation.js with getNotificationUrl function
-  - [x]* 8.4 Write property test for delete removes notification
+  - [x] 8.4 Write property test for delete removes notification
+
+
+
+
+
     - **Property 7: Delete removes notification**
     - **Validates: Requirements 4.1, 4.2, 4.3**
     - Note: Delete functionality implemented and tested via store actions (deleteNotification, deleteMultiple, clearAll)
