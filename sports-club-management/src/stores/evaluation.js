@@ -127,6 +127,8 @@ export const useEvaluationStore = defineStore('evaluation', () => {
           leave_reason: data.leave_reason,
           leave_approved: false,
           club_id: athlete.data?.club_id,
+          schedule_id: data.schedule_id || null,
+          event_id: data.event_id || null,
           recorded_by: authStore.user?.id
         })
         .select()

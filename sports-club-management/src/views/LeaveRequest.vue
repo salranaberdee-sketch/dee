@@ -6,21 +6,57 @@
       <p class="subtitle">ส่งคำขอลาล่วงหน้า</p>
     </div>
 
-    <!-- Leave Form -->
-    <form @submit.prevent="submitRequest" class="leave-form">
-      <div class="form-group">
-        <label>วันที่ลา</label>
-        <input type="date" v-model="form.date" required :min="minDate" />
-      </div>
+    <!-- Upcoming Activities -->
+    <div v-if="loadingActivities" class="loading-activities">
+      <div class="spinner"></div>
+      <span>กำลังโหลดกิจกรรม...</span>
+    </div>
 
+    <div v-else-if="upcomingActivities.length === 0" class="no-activities">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="4" width="18" height="18" rx="2"/>
+        <path d="M16 2v4M8 2v4M3 10h18"/>
+      </svg>
+      <p>ไม่มีกิจกรรมที่กำลังจะมาถึง</p>
+      <span>ไม่สามารถขอลาได้ในขณะนี้</span>
+    </div>
+
+    <!-- Leave Form -->
+    <form v-else @submit.prevent="submitRequest" class="leave-form">
       <div class="form-group">
-        <label>ประเภทกิจกรรม</label>
-        <select v-model="form.record_type">
-          <option value="training">ฝึกซ้อม</option>
-          <option value="competition">แข่งขัน</option>
-          <option value="meeting">ประชุม</option>
-          <option value="other">อื่นๆ</option>
-        </select>
+        <label>เลือกกิจกรรมที่ต้องการลา</label>
+        <div class="activity-list">
+          <label 
+            v-for="activity in upcomingActivities" 
+            :key="activity.id"
+            class="activity-option"
+            :class="{ active: selectedActivity?.id === activity.id }"
+          >
+            <input 
+              type="radio" 
+              :value="activity" 
+              v-model="selectedActivity"
+              name="activity"
+            />
+            <div class="activity-date">
+              <span class="day">{{ formatDay(activity.date) }}</span>
+              <span class="month">{{ formatMonthShort(activity.date) }}</span>
+            </div>
+            <div class="activity-info">
+              <span class="activity-title">{{ activity.title }}</span>
+              <span class="activity-meta">
+                <span class="activity-type" :class="activity.type">{{ getActivityTypeLabel(activity.type) }}</span>
+                <span class="activity-time">{{ activity.time }}</span>
+              </span>
+            </div>
+            <div class="activity-check" v-if="selectedActivity?.id === activity.id">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+            </div>
+          </label>
+        </div>
+        <p v-if="!selectedActivity" class="hint">กรุณาเลือกกิจกรรมที่ต้องการลา</p>
       </div>
 
       <div class="form-group">
@@ -124,17 +160,16 @@ const evaluationStore = useEvaluationStore()
 const authStore = useAuthStore()
 
 const form = reactive({
-  date: '',
-  record_type: 'training',
   leave_type: 'sick',
   leave_reason: ''
 })
 
 const leaveHistory = ref([])
+const upcomingActivities = ref([])
+const selectedActivity = ref(null)
 const loading = ref(false)
+const loadingActivities = ref(false)
 const submitting = ref(false)
-
-const minDate = computed(() => new Date().toISOString().slice(0, 10))
 
 function formatDay(dateStr) {
   return new Date(dateStr).getDate()
@@ -144,9 +179,82 @@ function formatMonth(dateStr) {
   return new Date(dateStr).toLocaleDateString('th-TH', { month: 'short' })
 }
 
+function formatMonthShort(dateStr) {
+  return new Date(dateStr).toLocaleDateString('th-TH', { month: 'short' })
+}
+
+function getActivityTypeLabel(type) {
+  const labels = { training: 'ฝึกซ้อม', competition: 'แข่งขัน', meeting: 'ประชุม', other: 'อื่นๆ' }
+  return labels[type] || type
+}
+
 function getLeaveTypeLabel(type) {
   const labels = { sick: 'ลาป่วย', personal: 'ลากิจ', emergency: 'ฉุกเฉิน', other: 'อื่นๆ' }
   return labels[type] || type
+}
+
+async function loadUpcomingActivities() {
+  loadingActivities.value = true
+  try {
+    const today = new Date().toISOString().slice(0, 10)
+    const clubId = authStore.profile?.club_id
+
+    // โหลด schedules ที่กำลังจะมาถึง
+    let scheduleQuery = supabase
+      .from('schedules')
+      .select('id, title, date, time, schedule_type, location')
+      .gte('date', today)
+      .order('date', { ascending: true })
+      .limit(20)
+
+    if (clubId) {
+      scheduleQuery = scheduleQuery.eq('club_id', clubId)
+    }
+
+    const { data: schedules } = await scheduleQuery
+
+    // โหลด events ที่กำลังจะมาถึง
+    let eventQuery = supabase
+      .from('events')
+      .select('id, title, event_date, start_time, event_type, location')
+      .gte('event_date', today)
+      .order('event_date', { ascending: true })
+      .limit(20)
+
+    if (clubId) {
+      eventQuery = eventQuery.eq('club_id', clubId)
+    }
+
+    const { data: events } = await eventQuery
+
+    // รวมและจัดเรียงตามวันที่
+    const activities = [
+      ...(schedules || []).map(s => ({
+        id: s.id,
+        title: s.title,
+        date: s.date,
+        time: s.time,
+        type: s.schedule_type,
+        location: s.location,
+        source: 'schedule'
+      })),
+      ...(events || []).map(e => ({
+        id: e.id,
+        title: e.title,
+        date: e.event_date,
+        time: e.start_time,
+        type: e.event_type,
+        location: e.location,
+        source: 'event'
+      }))
+    ].sort((a, b) => new Date(a.date) - new Date(b.date))
+
+    upcomingActivities.value = activities
+  } catch (err) {
+    console.error('Error loading activities:', err)
+  } finally {
+    loadingActivities.value = false
+  }
 }
 
 async function loadHistory() {
@@ -178,8 +286,13 @@ async function loadHistory() {
 }
 
 async function submitRequest() {
-  if (!form.date || !form.leave_reason) {
-    alert('กรุณากรอกข้อมูลให้ครบ')
+  if (!selectedActivity.value) {
+    alert('กรุณาเลือกกิจกรรมที่ต้องการลา')
+    return
+  }
+
+  if (!form.leave_reason) {
+    alert('กรุณาระบุเหตุผลการลา')
     return
   }
 
@@ -197,18 +310,22 @@ async function submitRequest() {
       return
     }
 
+    const activity = selectedActivity.value
     const result = await evaluationStore.submitLeaveRequest(athlete.id, {
-      date: form.date,
-      record_type: form.record_type,
+      date: activity.date,
+      record_type: activity.type,
       leave_type: form.leave_type,
-      leave_reason: form.leave_reason
+      leave_reason: form.leave_reason,
+      schedule_id: activity.source === 'schedule' ? activity.id : null,
+      event_id: activity.source === 'event' ? activity.id : null
     })
 
     if (result.success) {
-      alert('ส่งคำขอลาสำเร็จ')
-      form.date = ''
+      alert(`ส่งคำขอลาสำเร็จ\nกิจกรรม: ${activity.title}\nวันที่: ${new Date(activity.date).toLocaleDateString('th-TH')}`)
+      selectedActivity.value = null
       form.leave_reason = ''
       await loadHistory()
+      await loadUpcomingActivities()
     } else {
       alert('เกิดข้อผิดพลาด: ' + result.error)
     }
@@ -221,6 +338,7 @@ async function submitRequest() {
 }
 
 onMounted(() => {
+  loadUpcomingActivities()
   loadHistory()
 })
 </script>
@@ -246,6 +364,151 @@ onMounted(() => {
 .subtitle {
   color: #737373;
   margin: 0.25rem 0 0;
+}
+
+.loading-activities {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 3rem;
+  color: #737373;
+}
+
+.no-activities {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 3rem;
+  background: #fff;
+  border: 1px solid #E5E5E5;
+  border-radius: 12px;
+  text-align: center;
+}
+
+.no-activities svg {
+  width: 48px;
+  height: 48px;
+  color: #D4D4D4;
+  margin-bottom: 1rem;
+}
+
+.no-activities p {
+  font-weight: 500;
+  color: #525252;
+  margin: 0;
+}
+
+.no-activities span {
+  font-size: 0.875rem;
+  color: #737373;
+}
+
+.activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.activity-option {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  border: 2px solid #E5E5E5;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.activity-option:hover {
+  border-color: #A3A3A3;
+}
+
+.activity-option.active {
+  border-color: #171717;
+  background: #F5F5F5;
+}
+
+.activity-option input {
+  display: none;
+}
+
+.activity-date {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 50px;
+  padding: 0.5rem;
+  background: #171717;
+  color: #fff;
+  border-radius: 8px;
+}
+
+.activity-date .day {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.activity-date .month {
+  font-size: 0.75rem;
+  opacity: 0.8;
+}
+
+.activity-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.activity-title {
+  font-weight: 500;
+  color: #171717;
+}
+
+.activity-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+}
+
+.activity-type {
+  padding: 0.125rem 0.5rem;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.activity-type.training { background: #DBEAFE; color: #1E40AF; }
+.activity-type.competition { background: #FEE2E2; color: #991B1B; }
+.activity-type.meeting { background: #FEF3C7; color: #92400E; }
+.activity-type.other { background: #F5F5F5; color: #525252; }
+
+.activity-time {
+  color: #737373;
+}
+
+.activity-check {
+  width: 32px;
+  height: 32px;
+  background: #171717;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.activity-check svg {
+  width: 18px;
+  height: 18px;
+  color: #fff;
+}
+
+.hint {
+  font-size: 0.75rem;
+  color: #737373;
+  margin: 0.5rem 0 0;
 }
 
 .leave-form {
