@@ -55,6 +55,9 @@ export const useDataStore = defineStore('data', () => {
   const tournamentAwards = ref([])
   const userAlbums = ref([])
   const albumMedia = ref([])
+  const activityCategories = ref([])
+  const trainingGoals = ref([])
+  const userAchievements = ref([])
   const loading = ref(false)
   const error = ref(null)
 
@@ -372,7 +375,7 @@ export const useDataStore = defineStore('data', () => {
     loading.value = true
     const { data, error: err } = await supabase
       .from('training_logs')
-      .select('*, athletes(name), coaches(name), clubs(name)')
+      .select('*, athletes(name), coaches(name), clubs(name), activity_categories(id, name, icon)')
       .order('date', { ascending: false })
     
     if (!err) trainingLogs.value = data || []
@@ -384,7 +387,7 @@ export const useDataStore = defineStore('data', () => {
     const { data, error: err } = await supabase
       .from('training_logs')
       .insert(log)
-      .select('*, athletes(name), coaches(name), clubs(name)')
+      .select('*, athletes(name), coaches(name), clubs(name), activity_categories(id, name, icon)')
       .single()
     
     if (!err && data) {
@@ -399,7 +402,7 @@ export const useDataStore = defineStore('data', () => {
       .from('training_logs')
       .update({ ...updates, updated_at: new Date().toISOString() })
       .eq('id', id)
-      .select('*, athletes(name), coaches(name), clubs(name)')
+      .select('*, athletes(name), coaches(name), clubs(name), activity_categories(id, name, icon)')
       .single()
     
     if (!err && data) {
@@ -417,6 +420,609 @@ export const useDataStore = defineStore('data', () => {
       return { success: true }
     }
     return { success: false, message: err?.message }
+  }
+
+  // ============ ACTIVITY CATEGORIES ============
+  // Requirements: 1.4, 6.2, 6.3
+
+  /**
+   * Fetch active activity categories
+   * @returns {Promise<Array>} Categories array sorted by sort_order
+   */
+  async function fetchActivityCategories() {
+    const { data, error: err } = await supabase
+      .from('activity_categories')
+      .select('*')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true })
+    
+    if (!err) activityCategories.value = data || []
+    else error.value = err.message
+    return activityCategories.value
+  }
+
+  /**
+   * Fetch all activity categories (including inactive) - Admin only
+   * @returns {Promise<Array>} All categories array
+   */
+  async function fetchAllActivityCategories() {
+    const { data, error: err } = await supabase
+      .from('activity_categories')
+      .select('*')
+      .order('sort_order', { ascending: true })
+    
+    if (!err) return data || []
+    return []
+  }
+
+  /**
+   * Add a new activity category - Admin only
+   * @param {Object} categoryData - { name, icon?, sort_order? }
+   * @returns {Promise<{success: boolean, data?: Object, message?: string}>}
+   */
+  async function addActivityCategory(categoryData) {
+    if (!categoryData.name || categoryData.name.trim() === '') {
+      return { success: false, message: 'กรุณาระบุชื่อหมวดหมู่' }
+    }
+
+    const payload = {
+      name: categoryData.name.trim(),
+      icon: categoryData.icon || null,
+      sort_order: categoryData.sort_order || 0,
+      is_active: true
+    }
+
+    const { data, error: err } = await supabase
+      .from('activity_categories')
+      .insert(payload)
+      .select()
+      .single()
+    
+    if (!err && data) {
+      activityCategories.value.push(data)
+      activityCategories.value.sort((a, b) => a.sort_order - b.sort_order)
+      return { success: true, data }
+    }
+    return { success: false, message: err?.message }
+  }
+
+  /**
+   * Update an activity category - Admin only
+   * Requirement 6.3: Deactivating preserves existing logs
+   * @param {string} id - Category ID
+   * @param {Object} updates - { name?, icon?, sort_order?, is_active? }
+   * @returns {Promise<{success: boolean, message?: string}>}
+   */
+  async function updateActivityCategory(id, updates) {
+    if (updates.name !== undefined && (!updates.name || updates.name.trim() === '')) {
+      return { success: false, message: 'กรุณาระบุชื่อหมวดหมู่' }
+    }
+
+    const payload = {}
+    if (updates.name !== undefined) payload.name = updates.name.trim()
+    if (updates.icon !== undefined) payload.icon = updates.icon
+    if (updates.sort_order !== undefined) payload.sort_order = updates.sort_order
+    if (updates.is_active !== undefined) payload.is_active = updates.is_active
+
+    const { data, error: err } = await supabase
+      .from('activity_categories')
+      .update(payload)
+      .eq('id', id)
+      .select()
+      .single()
+    
+    if (!err && data) {
+      // Update local state
+      const idx = activityCategories.value.findIndex(c => c.id === id)
+      if (idx !== -1) {
+        if (data.is_active) {
+          activityCategories.value[idx] = data
+        } else {
+          // Remove from active list if deactivated
+          activityCategories.value.splice(idx, 1)
+        }
+      } else if (data.is_active) {
+        // Add to list if reactivated
+        activityCategories.value.push(data)
+      }
+      activityCategories.value.sort((a, b) => a.sort_order - b.sort_order)
+      return { success: true, data }
+    }
+    return { success: false, message: err?.message }
+  }
+
+  /**
+   * Get category by ID
+   * @param {string} id - Category ID
+   * @returns {Object|undefined} Category object
+   */
+  function getCategoryById(id) {
+    return activityCategories.value.find(c => c.id === id)
+  }
+
+  /**
+   * Filter training logs by category
+   * Property 1: Category filter returns only matching logs
+   * @param {string} categoryId - Category ID to filter by
+   * @returns {Array} Filtered training logs
+   */
+  function filterLogsByCategory(categoryId) {
+    if (!categoryId) return trainingLogs.value
+    return trainingLogs.value.filter(log => log.category_id === categoryId)
+  }
+
+  // ============ TRAINING STATISTICS ============
+  // Requirements: 2.1, 2.2, 2.3, 2.4
+
+  /**
+   * Get training statistics for a user within a date range
+   * Property 2: Statistics calculation accuracy
+   * @param {string} userId - User ID
+   * @param {Object} dateRange - { startDate, endDate } in ISO format
+   * @returns {Promise<{totalSessions: number, totalHours: number, avgRating: number}>}
+   */
+  async function getTrainingStats(userId, dateRange = {}) {
+    let query = supabase
+      .from('training_logs')
+      .select('id, duration, rating, date')
+      .eq('user_id', userId)
+    
+    if (dateRange.startDate) {
+      query = query.gte('date', dateRange.startDate)
+    }
+    if (dateRange.endDate) {
+      query = query.lte('date', dateRange.endDate)
+    }
+
+    const { data, error: err } = await query
+
+    if (err || !data) {
+      return { totalSessions: 0, totalHours: 0, avgRating: 0 }
+    }
+
+    const totalSessions = data.length
+    const totalMinutes = data.reduce((sum, log) => sum + (log.duration || 0), 0)
+    const totalHours = Math.round((totalMinutes / 60) * 10) / 10 // Round to 1 decimal
+    const totalRating = data.reduce((sum, log) => sum + (log.rating || 0), 0)
+    const avgRating = totalSessions > 0 ? Math.round((totalRating / totalSessions) * 10) / 10 : 0
+
+    return { totalSessions, totalHours, avgRating }
+  }
+
+  /**
+   * Get weekly comparison - current week vs previous week
+   * @param {string} userId - User ID
+   * @returns {Promise<{currentWeek: Object, previousWeek: Object, change: Object}>}
+   */
+  async function getWeeklyComparison(userId) {
+    const now = new Date()
+    const dayOfWeek = now.getDay()
+    
+    // Calculate current week start (Monday)
+    const currentWeekStart = new Date(now)
+    currentWeekStart.setDate(now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
+    currentWeekStart.setHours(0, 0, 0, 0)
+    
+    // Calculate previous week start
+    const previousWeekStart = new Date(currentWeekStart)
+    previousWeekStart.setDate(previousWeekStart.getDate() - 7)
+    
+    // Calculate previous week end
+    const previousWeekEnd = new Date(currentWeekStart)
+    previousWeekEnd.setDate(previousWeekEnd.getDate() - 1)
+
+    const currentWeekStats = await getTrainingStats(userId, {
+      startDate: currentWeekStart.toISOString().split('T')[0],
+      endDate: now.toISOString().split('T')[0]
+    })
+
+    const previousWeekStats = await getTrainingStats(userId, {
+      startDate: previousWeekStart.toISOString().split('T')[0],
+      endDate: previousWeekEnd.toISOString().split('T')[0]
+    })
+
+    // Calculate change percentages
+    const sessionChange = previousWeekStats.totalSessions > 0
+      ? Math.round(((currentWeekStats.totalSessions - previousWeekStats.totalSessions) / previousWeekStats.totalSessions) * 100)
+      : currentWeekStats.totalSessions > 0 ? 100 : 0
+
+    const hoursChange = previousWeekStats.totalHours > 0
+      ? Math.round(((currentWeekStats.totalHours - previousWeekStats.totalHours) / previousWeekStats.totalHours) * 100)
+      : currentWeekStats.totalHours > 0 ? 100 : 0
+
+    return {
+      currentWeek: currentWeekStats,
+      previousWeek: previousWeekStats,
+      change: {
+        sessions: sessionChange,
+        hours: hoursChange
+      }
+    }
+  }
+
+  /**
+   * Get training distribution by category
+   * @param {string} userId - User ID
+   * @param {Object} dateRange - Optional { startDate, endDate }
+   * @returns {Promise<Array<{categoryId: string, categoryName: string, count: number, percentage: number}>>}
+   */
+  async function getCategoryDistribution(userId, dateRange = {}) {
+    let query = supabase
+      .from('training_logs')
+      .select('category_id, activity_categories(id, name, icon)')
+      .eq('user_id', userId)
+    
+    if (dateRange.startDate) {
+      query = query.gte('date', dateRange.startDate)
+    }
+    if (dateRange.endDate) {
+      query = query.lte('date', dateRange.endDate)
+    }
+
+    const { data, error: err } = await query
+
+    if (err || !data || data.length === 0) {
+      return []
+    }
+
+    // Group by category
+    const categoryMap = new Map()
+    data.forEach(log => {
+      const catId = log.category_id || 'uncategorized'
+      const catName = log.activity_categories?.name || 'ไม่ระบุหมวดหมู่'
+      const catIcon = log.activity_categories?.icon || null
+      
+      if (categoryMap.has(catId)) {
+        categoryMap.get(catId).count++
+      } else {
+        categoryMap.set(catId, {
+          categoryId: catId,
+          categoryName: catName,
+          categoryIcon: catIcon,
+          count: 1
+        })
+      }
+    })
+
+    // Calculate percentages and convert to array
+    const total = data.length
+    const distribution = Array.from(categoryMap.values()).map(cat => ({
+      ...cat,
+      percentage: Math.round((cat.count / total) * 100)
+    }))
+
+    // Sort by count descending
+    distribution.sort((a, b) => b.count - a.count)
+
+    return distribution
+  }
+
+  /**
+   * Get daily training data for a week (for chart display)
+   * @param {string} userId - User ID
+   * @param {Date} weekStart - Start of the week
+   * @returns {Promise<Array<{date: string, dayName: string, sessions: number}>>}
+   */
+  async function getWeeklyChartData(userId, weekStart = null) {
+    const now = new Date()
+    const dayOfWeek = now.getDay()
+    
+    // Default to current week start (Monday)
+    if (!weekStart) {
+      weekStart = new Date(now)
+      weekStart.setDate(now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
+      weekStart.setHours(0, 0, 0, 0)
+    }
+
+    const weekEnd = new Date(weekStart)
+    weekEnd.setDate(weekEnd.getDate() + 6)
+
+    const { data, error: err } = await supabase
+      .from('training_logs')
+      .select('date')
+      .eq('user_id', userId)
+      .gte('date', weekStart.toISOString().split('T')[0])
+      .lte('date', weekEnd.toISOString().split('T')[0])
+
+    const dayNames = ['จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.', 'อา.']
+    const chartData = []
+
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(weekStart)
+      date.setDate(date.getDate() + i)
+      const dateStr = date.toISOString().split('T')[0]
+      
+      const sessions = data?.filter(log => log.date === dateStr).length || 0
+      
+      chartData.push({
+        date: dateStr,
+        dayName: dayNames[i],
+        sessions
+      })
+    }
+
+    return chartData
+  }
+
+  // ============ TRAINING GOALS ============
+  // Requirements: 3.1, 3.2, 3.3
+
+  /**
+   * Fetch user's current active goal
+   * @param {string} userId - User ID
+   * @returns {Promise<Object|null>} Goal object or null
+   */
+  async function fetchUserGoal(userId) {
+    const { data, error: err } = await supabase
+      .from('training_goals')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('is_active', true)
+      .eq('goal_type', 'weekly_sessions')
+      .single()
+    
+    if (!err && data) {
+      trainingGoals.value = [data]
+      return data
+    }
+    // Return default goal if none exists (Requirement 3.5)
+    return { goal_type: 'weekly_sessions', target_value: 3, is_active: true }
+  }
+
+  /**
+   * Set or update user's training goal
+   * @param {string} userId - User ID
+   * @param {Object} goalData - { target_value, goal_type? }
+   * @returns {Promise<{success: boolean, data?: Object, message?: string}>}
+   */
+  async function setUserGoal(userId, goalData) {
+    // Validate target value (1-7 sessions per week)
+    const targetValue = parseInt(goalData.target_value)
+    if (isNaN(targetValue) || targetValue < 1 || targetValue > 7) {
+      return { success: false, message: 'เป้าหมายต้องเป็นตัวเลข 1-7' }
+    }
+
+    const payload = {
+      user_id: userId,
+      goal_type: goalData.goal_type || 'weekly_sessions',
+      target_value: targetValue,
+      start_date: new Date().toISOString().split('T')[0],
+      is_active: true
+    }
+
+    // Use upsert to create or update
+    const { data, error: err } = await supabase
+      .from('training_goals')
+      .upsert(payload, { onConflict: 'user_id,goal_type' })
+      .select()
+      .single()
+    
+    if (!err && data) {
+      trainingGoals.value = [data]
+      return { success: true, data }
+    }
+    return { success: false, message: err?.message }
+  }
+
+  /**
+   * Get goal progress for current week
+   * Property 3: Goal progress calculation
+   * @param {string} userId - User ID
+   * @returns {Promise<{goal: Object, progress: number, isCompleted: boolean}>}
+   */
+  async function getGoalProgress(userId) {
+    // Get user's goal
+    const goal = await fetchUserGoal(userId)
+    
+    // Calculate current week's sessions
+    const now = new Date()
+    const dayOfWeek = now.getDay()
+    
+    // Calculate current week start (Monday)
+    const weekStart = new Date(now)
+    weekStart.setDate(now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
+    weekStart.setHours(0, 0, 0, 0)
+
+    const { data, error: err } = await supabase
+      .from('training_logs')
+      .select('id')
+      .eq('user_id', userId)
+      .gte('date', weekStart.toISOString().split('T')[0])
+      .lte('date', now.toISOString().split('T')[0])
+
+    const progress = data?.length || 0
+    const targetValue = goal?.target_value || 3
+    const isCompleted = progress >= targetValue
+
+    return {
+      goal,
+      progress,
+      targetValue,
+      isCompleted,
+      percentage: Math.min(Math.round((progress / targetValue) * 100), 100)
+    }
+  }
+
+  // ============ STREAKS & ACHIEVEMENTS ============
+  // Requirements: 4.1, 4.2, 4.3, 4.4
+
+  // Achievement milestone definitions
+  const STREAK_MILESTONES = [7, 14, 30, 60, 90]
+  const ACHIEVEMENT_TYPES = {
+    7: 'streak_7_days',
+    14: 'streak_14_days',
+    30: 'streak_30_days',
+    60: 'streak_60_days',
+    90: 'streak_90_days'
+  }
+
+  /**
+   * Calculate consecutive training days streak
+   * Property 4: Streak calculation correctness
+   * @param {string} userId - User ID
+   * @returns {Promise<number>} Number of consecutive days
+   */
+  async function calculateStreak(userId) {
+    // Get all training logs sorted by date descending
+    const { data, error: err } = await supabase
+      .from('training_logs')
+      .select('date')
+      .eq('user_id', userId)
+      .order('date', { ascending: false })
+
+    if (err || !data || data.length === 0) {
+      return 0
+    }
+
+    // Get unique dates (in case of multiple logs per day)
+    const uniqueDates = [...new Set(data.map(log => log.date))].sort().reverse()
+    
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const todayStr = today.toISOString().split('T')[0]
+    
+    const yesterday = new Date(today)
+    yesterday.setDate(yesterday.getDate() - 1)
+    const yesterdayStr = yesterday.toISOString().split('T')[0]
+
+    // Check if the most recent log is today or yesterday
+    const mostRecentDate = uniqueDates[0]
+    if (mostRecentDate !== todayStr && mostRecentDate !== yesterdayStr) {
+      // Streak is broken - gap of more than one day
+      return 0
+    }
+
+    // Count consecutive days
+    let streak = 0
+    let checkDate = mostRecentDate === todayStr ? today : yesterday
+
+    for (const dateStr of uniqueDates) {
+      const expectedDateStr = checkDate.toISOString().split('T')[0]
+      
+      if (dateStr === expectedDateStr) {
+        streak++
+        checkDate.setDate(checkDate.getDate() - 1)
+      } else if (dateStr < expectedDateStr) {
+        // Gap found, streak ends
+        break
+      }
+      // If dateStr > expectedDateStr, skip (duplicate date handling)
+    }
+
+    return streak
+  }
+
+  /**
+   * Fetch user's earned achievements
+   * @param {string} userId - User ID
+   * @returns {Promise<Array>} Array of achievement objects
+   */
+  async function fetchUserAchievements(userId) {
+    const { data, error: err } = await supabase
+      .from('user_achievements')
+      .select('*')
+      .eq('user_id', userId)
+      .order('earned_at', { ascending: false })
+    
+    if (!err) {
+      userAchievements.value = data || []
+      return data || []
+    }
+    return []
+  }
+
+  /**
+   * Check and award achievements based on current streak
+   * Property 5: Achievement milestone awards
+   * @param {string} userId - User ID
+   * @returns {Promise<{newAchievements: Array, currentStreak: number}>}
+   */
+  async function checkAndAwardAchievements(userId) {
+    const currentStreak = await calculateStreak(userId)
+    const existingAchievements = await fetchUserAchievements(userId)
+    const existingTypes = new Set(existingAchievements.map(a => a.achievement_type))
+    
+    const newAchievements = []
+
+    // Check each milestone
+    for (const milestone of STREAK_MILESTONES) {
+      const achievementType = ACHIEVEMENT_TYPES[milestone]
+      
+      // Award if streak >= milestone and not already earned
+      if (currentStreak >= milestone && !existingTypes.has(achievementType)) {
+        const { data, error: err } = await supabase
+          .from('user_achievements')
+          .insert({
+            user_id: userId,
+            achievement_type: achievementType
+          })
+          .select()
+          .single()
+        
+        if (!err && data) {
+          newAchievements.push(data)
+          userAchievements.value.unshift(data)
+        }
+      }
+    }
+
+    return {
+      newAchievements,
+      currentStreak
+    }
+  }
+
+  /**
+   * Get next milestone to achieve
+   * @param {number} currentStreak - Current streak count
+   * @returns {{milestone: number, daysRemaining: number}|null}
+   */
+  function getNextMilestone(currentStreak) {
+    for (const milestone of STREAK_MILESTONES) {
+      if (currentStreak < milestone) {
+        return {
+          milestone,
+          daysRemaining: milestone - currentStreak
+        }
+      }
+    }
+    return null // All milestones achieved
+  }
+
+  /**
+   * Get achievement display info
+   * @param {string} achievementType - Achievement type string
+   * @returns {{name: string, icon: string, description: string}}
+   */
+  function getAchievementInfo(achievementType) {
+    const achievementMap = {
+      'streak_7_days': {
+        name: 'สัปดาห์แรก',
+        icon: 'star',
+        description: 'ฝึกซ้อมติดต่อกัน 7 วัน'
+      },
+      'streak_14_days': {
+        name: 'สองสัปดาห์',
+        icon: 'fire',
+        description: 'ฝึกซ้อมติดต่อกัน 14 วัน'
+      },
+      'streak_30_days': {
+        name: 'หนึ่งเดือน',
+        icon: 'trophy',
+        description: 'ฝึกซ้อมติดต่อกัน 30 วัน'
+      },
+      'streak_60_days': {
+        name: 'สองเดือน',
+        icon: 'medal',
+        description: 'ฝึกซ้อมติดต่อกัน 60 วัน'
+      },
+      'streak_90_days': {
+        name: 'สามเดือน',
+        icon: 'crown',
+        description: 'ฝึกซ้อมติดต่อกัน 90 วัน'
+      }
+    }
+    return achievementMap[achievementType] || { name: achievementType, icon: 'badge', description: '' }
   }
 
 
@@ -1898,6 +2504,25 @@ export const useDataStore = defineStore('data', () => {
     
     // Training Logs
     fetchTrainingLogs, addTrainingLog, updateTrainingLog, deleteTrainingLog,
+    
+    // Activity Categories (Requirements: 1.4, 6.2, 6.3)
+    activityCategories,
+    fetchActivityCategories, fetchAllActivityCategories,
+    addActivityCategory, updateActivityCategory,
+    getCategoryById, filterLogsByCategory,
+    
+    // Training Statistics (Requirements: 2.1, 2.2, 2.3, 2.4)
+    getTrainingStats, getWeeklyComparison, getCategoryDistribution, getWeeklyChartData,
+    
+    // Training Goals (Requirements: 3.1, 3.2, 3.3)
+    trainingGoals,
+    fetchUserGoal, setUserGoal, getGoalProgress,
+    
+    // Streaks & Achievements (Requirements: 4.1, 4.2, 4.3, 4.4)
+    userAchievements,
+    calculateStreak, fetchUserAchievements, checkAndAwardAchievements,
+    getNextMilestone, getAchievementInfo,
+    STREAK_MILESTONES, ACHIEVEMENT_TYPES,
     
     // Announcements
     fetchAnnouncements, addAnnouncement, updateAnnouncement, deleteAnnouncement,

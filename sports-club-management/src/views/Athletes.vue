@@ -5,6 +5,7 @@ import { useDataStore } from '@/stores/data'
 import Modal from '@/components/Modal.vue'
 import AthleteHistory from '@/components/AthleteHistory.vue'
 import AlbumSection from '@/components/AlbumSection.vue'
+import AthleteTrainingStats from '@/components/AthleteTrainingStats.vue'
 
 const auth = useAuthStore()
 const data = useDataStore()
@@ -289,6 +290,14 @@ function calculateAge(birthDate) {
               </svg>
               อัลบั้มรูปภาพ
             </button>
+            <button v-if="auth.isCoach || auth.isAdmin" :class="['tab', { active: activeTab === 'training' }]" @click="activeTab = 'training'">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/>
+                <rect x="8" y="2" width="8" height="4" rx="1"/>
+                <path d="M9 14l2 2 4-4"/>
+              </svg>
+              สถิติการฝึก
+            </button>
           </div>
 
           <!-- Info Tab -->
@@ -415,6 +424,22 @@ function calculateAge(birthDate) {
                 <polyline points="21 15 16 10 5 21"/>
               </svg>
               <p>ไม่พบข้อมูลอัลบั้ม</p>
+            </div>
+          </div>
+
+          <!-- Training Stats Tab - Requirements 5.1, 5.2 -->
+          <div v-if="activeTab === 'training'" class="tab-content">
+            <AthleteTrainingStats 
+              v-if="selectedAthlete?.user_id" 
+              :athlete-id="selectedAthlete.id"
+              :user-id="selectedAthlete.user_id"
+            />
+            <div v-else class="empty-docs">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/>
+                <rect x="8" y="2" width="8" height="4" rx="1"/>
+              </svg>
+              <p>ไม่พบข้อมูลสถิติการฝึก</p>
             </div>
           </div>
         </div>

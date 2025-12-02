@@ -134,3 +134,72 @@ DISABLE_INSTALL_PROMPT = true  (ปิดอยู่ - สำหรับทด
 - [x] UI: แสดง sync status (synced/pending)
 - [x] Notification: แจ้งเตือนเมื่อ sync สำเร็จ
 ```
+
+
+---
+
+## ✅ Feature PWA Checklists (สถานะปัจจุบัน)
+
+### ฟีเจอร์: Push Notifications
+```
+- [x] Service Worker: Handle push events
+- [x] Permission: ขอ permission จาก user
+- [x] Subscribe: ลงทะเบียน push subscription
+- [x] Notification Display: แสดง notification พร้อม icon
+- [x] Click Navigation: นำทางไปหน้าที่เกี่ยวข้อง
+- [x] Preferences: ตั้งค่าประเภทการแจ้งเตือน
+- [x] Multi-device: รองรับหลายอุปกรณ์
+- [x] Cleanup: ลบ subscription เมื่อ logout
+```
+
+### ฟีเจอร์: Notification Inbox
+```
+- [x] Realtime: อัพเดทแบบ realtime ผ่าน Supabase
+- [x] Badge: แสดงจำนวน unread ใน NavBar
+- [x] Pagination: โหลดเพิ่มเมื่อ scroll
+- [x] Filter: กรองตามประเภท notification
+- [x] Read Status: mark as read/unread
+- [x] Bulk Actions: mark all, clear all
+- [x] Navigation: คลิกไปหน้าที่เกี่ยวข้อง
+- [ ] Offline: Cache notifications ใน IndexedDB (TODO)
+```
+
+### ฟีเจอร์: Profile Album
+```
+- [x] Upload: อัพโหลดรูป/วิดีโอไป Storage
+- [x] Validation: ตรวจสอบ file type และ size
+- [x] Quota: จำกัด storage ต่อ user
+- [x] Thumbnail: แสดง thumbnail ใน grid
+- [x] Preview: ดูรูปขนาดเต็ม
+- [ ] Offline: Cache รูปที่เปิดล่าสุด (TODO)
+- [ ] Upload Queue: Queue upload เมื่อ offline (TODO)
+```
+
+### ฟีเจอร์: Training Logs Enhancement
+```
+- [x] Categories: เลือกประเภทกิจกรรม
+- [x] Statistics: แสดงสถิติการฝึกซ้อม
+- [x] Goals: ตั้งเป้าหมายรายสัปดาห์
+- [ ] Streak: นับวันฝึกซ้อมต่อเนื่อง (In Progress)
+- [ ] Achievements: ระบบ badges (In Progress)
+- [ ] Offline: บันทึกลง IndexedDB ก่อน (TODO)
+- [ ] Sync: Queue ไว้ถ้า offline (TODO)
+```
+
+---
+
+## 📋 PWA TODO Summary
+
+### High Priority
+- [ ] IndexedDB caching สำหรับ notifications
+- [ ] Offline queue สำหรับ training logs
+- [ ] Background sync implementation
+
+### Medium Priority
+- [ ] Cache profile album images
+- [ ] Offline upload queue
+- [ ] Online/Offline indicator ใน NavBar
+
+### Low Priority
+- [ ] Skeleton loading states
+- [ ] Sync progress indicator

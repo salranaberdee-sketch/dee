@@ -10,6 +10,7 @@ const routes = [
   { path: '/clubs', name: 'Clubs', component: () => import('@/views/Clubs.vue'), meta: { requiresAuth: true, roles: ['admin'] } },
   { path: '/clubs/:id', name: 'ClubDetail', component: () => import('@/views/ClubDetail.vue'), meta: { requiresAuth: true, roles: ['admin'] } },
   { path: '/backup', name: 'Backup', component: () => import('@/views/Backup.vue'), meta: { requiresAuth: true, roles: ['admin'] } },
+  { path: '/category-management', name: 'CategoryManagement', component: () => import('@/views/CategoryManagement.vue'), meta: { requiresAuth: true, roles: ['admin'] } },
   
   // Admin & Coach
   { path: '/coaches', name: 'Coaches', component: () => import('@/views/Coaches.vue'), meta: { requiresAuth: true, roles: ['admin'] } },
