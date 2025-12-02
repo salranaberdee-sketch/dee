@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { supabase } from '@/lib/supabase'
 import { unsubscribeFromPush, isPushSupported } from '@/lib/pushNotification'
+import { deleteAvatar } from '@/lib/avatar'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref(null)
@@ -137,6 +138,142 @@ export const useAuthStore = defineStore('auth', () => {
     return { success: false, message: error.message }
   }
 
+  /**
+   * Update avatar URL in user profile
+   * Implements Requirement 1.5 - update avatar_url field in User_Profile
+   * 
+   * @param {string|null} avatarUrl - The new avatar URL or null to clear
+   * @returns {Promise<{success: boolean, message?: string}>}
+   */
+  async function updateAvatar(avatarUrl) {
+    if (!user.value) {
+      return { success: false, message: 'User not authenticated' }
+    }
+
+    try {
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({ avatar_url: avatarUrl })
+        .eq('id', user.value.id)
+
+      if (error) {
+        console.error('Error updating avatar:', error)
+        return { success: false, message: error.message || 'Failed to update avatar' }
+      }
+
+      // Update local profile state
+      profile.value = { ...profile.value, avatar_url: avatarUrl }
+      return { success: true }
+    } catch (error) {
+      console.error('Error in updateAvatar:', error)
+      return { success: false, message: error.message || 'Failed to update avatar' }
+    }
+  }
+
+  /**
+   * Remove avatar - delete file from storage and set avatar_url to null
+   * Implements Requirements 4.2 (delete from storage) and 4.3 (set avatar_url to null)
+   * 
+   * @returns {Promise<{success: boolean, message?: string}>}
+   */
+  async function removeAvatar() {
+    if (!user.value) {
+      return { success: false, message: 'User not authenticated' }
+    }
+
+    const currentAvatarUrl = profile.value?.avatar_url
+
+    try {
+      // Delete file from storage if exists (Requirement 4.2)
+      if (currentAvatarUrl) {
+        const deleteResult = await deleteAvatar(user.value.id, currentAvatarUrl)
+        if (!deleteResult.success && !deleteResult.warning) {
+          // Only fail if there's a real error, not just a warning
+          return { success: false, message: deleteResult.error || 'Failed to delete avatar file' }
+        }
+      }
+
+      // Set avatar_url to null in database (Requirement 4.3)
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({ avatar_url: null })
+        .eq('id', user.value.id)
+
+      if (error) {
+        console.error('Error removing avatar from profile:', error)
+        return { success: false, message: error.message || 'Failed to remove avatar' }
+      }
+
+      // Update local profile state
+      profile.value = { ...profile.value, avatar_url: null }
+      return { success: true }
+    } catch (error) {
+      console.error('Error in removeAvatar:', error)
+      return { success: false, message: error.message || 'Failed to remove avatar' }
+    }
+  }
+
+  /**
+   * Admin function to remove another user's avatar
+   * Implements Requirement 6.2 - admin can remove user's profile picture
+   * 
+   * @param {string} targetUserId - The user ID whose avatar should be removed
+   * @param {string} currentAvatarUrl - The current avatar URL to delete from storage
+   * @returns {Promise<{success: boolean, message?: string}>}
+   */
+  async function adminRemoveUserAvatar(targetUserId, currentAvatarUrl) {
+    if (!user.value) {
+      return { success: false, message: 'User not authenticated' }
+    }
+
+    // Verify current user is admin
+    if (profile.value?.role !== 'admin') {
+      return { success: false, message: 'Only admins can remove other users\' avatars' }
+    }
+
+    if (!targetUserId) {
+      return { success: false, message: 'Target user ID is required' }
+    }
+
+    try {
+      // Delete file from storage if exists
+      if (currentAvatarUrl) {
+        // Extract file path and delete from storage
+        const STORAGE_BUCKET = 'profile-pictures'
+        const urlParts = currentAvatarUrl.split(`/storage/v1/object/public/${STORAGE_BUCKET}/`)
+        
+        if (urlParts.length >= 2) {
+          const filePath = urlParts[1]
+          // Admin can delete any user's avatar
+          const { error: deleteError } = await supabase.storage
+            .from(STORAGE_BUCKET)
+            .remove([filePath])
+          
+          if (deleteError) {
+            console.warn('Warning: Could not delete avatar file from storage:', deleteError)
+            // Continue anyway - we still want to clear the avatar_url
+          }
+        }
+      }
+
+      // Set avatar_url to null in database
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({ avatar_url: null })
+        .eq('id', targetUserId)
+
+      if (error) {
+        console.error('Error removing avatar from profile:', error)
+        return { success: false, message: error.message || 'Failed to remove avatar' }
+      }
+
+      return { success: true }
+    } catch (error) {
+      console.error('Error in adminRemoveUserAvatar:', error)
+      return { success: false, message: error.message || 'Failed to remove avatar' }
+    }
+  }
+
   return { 
     user, 
     profile, 
@@ -150,6 +287,9 @@ export const useAuthStore = defineStore('auth', () => {
     register,
     logout, 
     updateProfile,
-    fetchProfile
+    fetchProfile,
+    updateAvatar,
+    removeAvatar,
+    adminRemoveUserAvatar
   }
 })

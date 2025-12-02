@@ -161,7 +161,7 @@ DISABLE_INSTALL_PROMPT = true  (ปิดอยู่ - สำหรับทด
 - [x] Read Status: mark as read/unread
 - [x] Bulk Actions: mark all, clear all
 - [x] Navigation: คลิกไปหน้าที่เกี่ยวข้อง
-- [ ] Offline: Cache notifications ใน IndexedDB (TODO)
+- [x] Offline: Cache notifications ใน IndexedDB ✅
 ```
 
 ### ฟีเจอร์: Profile Album
@@ -182,8 +182,8 @@ DISABLE_INSTALL_PROMPT = true  (ปิดอยู่ - สำหรับทด
 - [x] Goals: ตั้งเป้าหมายรายสัปดาห์
 - [ ] Streak: นับวันฝึกซ้อมต่อเนื่อง (In Progress)
 - [ ] Achievements: ระบบ badges (In Progress)
-- [ ] Offline: บันทึกลง IndexedDB ก่อน (TODO)
-- [ ] Sync: Queue ไว้ถ้า offline (TODO)
+- [x] Offline: บันทึกลง IndexedDB ก่อน ✅
+- [x] Sync: Queue ไว้ถ้า offline ✅
 ```
 
 ---
@@ -191,14 +191,14 @@ DISABLE_INSTALL_PROMPT = true  (ปิดอยู่ - สำหรับทด
 ## 📋 PWA TODO Summary
 
 ### High Priority
-- [ ] IndexedDB caching สำหรับ notifications
-- [ ] Offline queue สำหรับ training logs
-- [ ] Background sync implementation
+- [x] IndexedDB caching สำหรับ notifications ✅
+- [x] Offline queue สำหรับ training logs ✅
+- [x] Background sync implementation ✅
 
 ### Medium Priority
 - [ ] Cache profile album images
 - [ ] Offline upload queue
-- [ ] Online/Offline indicator ใน NavBar
+- [x] Online/Offline indicator ใน NavBar ✅
 
 ### Low Priority
 - [ ] Skeleton loading states

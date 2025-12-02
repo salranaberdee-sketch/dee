@@ -1,16 +1,33 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationInboxStore } from '@/stores/notificationInbox'
+import { useOfflineSyncStore } from '@/stores/offlineSync'
 import NotificationBadge from '@/components/NotificationBadge.vue'
+import UserAvatar from '@/components/UserAvatar.vue'
+import OnlineIndicator from '@/components/OnlineIndicator.vue'
 
 const route = useRoute()
 const auth = useAuthStore()
 const notificationInbox = useNotificationInboxStore()
+const offlineSync = useOfflineSyncStore()
+
+// Initialize offline sync listeners
+onMounted(() => {
+  offlineSync.initListeners()
+})
+
+onUnmounted(() => {
+  offlineSync.cleanupListeners()
+})
 
 // Get unread count from notification inbox store
 const unreadCount = computed(() => notificationInbox.unreadCount)
+
+// Get user avatar URL and name for profile nav item (Requirement 3.2)
+const userAvatarUrl = computed(() => auth.profile?.avatar_url || null)
+const userName = computed(() => auth.profile?.full_name || auth.profile?.email || '')
 
 const navItems = computed(() => {
   const items = [
@@ -30,6 +47,9 @@ function isActive(to) {
 </script>
 
 <template>
+  <!-- Online/Offline Indicator - Fixed at top -->
+  <OnlineIndicator class="online-indicator-fixed" />
+  
   <nav class="nav-bottom">
     <router-link 
       v-for="item in navItems" 
@@ -56,9 +76,14 @@ function isActive(to) {
         </svg>
         <!-- Use NotificationBadge component for bell icon (Requirements 3.1) -->
         <NotificationBadge v-else-if="item.icon === 'bell'" />
-        <svg v-else-if="item.icon === 'user'" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
-        </svg>
+        <!-- Use UserAvatar component for profile (Requirement 3.2) -->
+        <UserAvatar 
+          v-else-if="item.icon === 'user'"
+          :avatar-url="userAvatarUrl"
+          :user-name="userName"
+          size="sm"
+          class="nav-avatar"
+        />
       </div>
       <span class="nav-label">{{ item.label }}</span>
     </router-link>
@@ -75,4 +100,22 @@ function isActive(to) {
   border-radius: 100px; display: flex; align-items: center; justify-content: center;
 }
 .nav-label { margin-top: 2px; }
+
+/* UserAvatar styling for NavBar (Requirement 3.2) */
+.nav-avatar {
+  width: 24px !important;
+  height: 24px !important;
+  border-width: 1.5px !important;
+  font-size: 11px !important;
+}
+
+/* Online Indicator positioning */
+.online-indicator-fixed {
+  position: fixed;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
 </style>

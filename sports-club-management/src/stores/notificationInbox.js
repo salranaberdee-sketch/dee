@@ -9,6 +9,13 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { supabase } from '@/lib/supabase'
+import {
+  cacheNotifications,
+  getCachedNotifications,
+  addNotificationToCache,
+  removeNotificationFromCache,
+  updateNotificationInCache
+} from '@/lib/indexedDB'
 
 // Page size for pagination
 const PAGE_SIZE = 20
@@ -97,6 +104,10 @@ export const useNotificationInboxStore = defineStore('notificationInbox', () => 
       // For page 1, replace notifications; otherwise append
       if (page === 1) {
         notifications.value = data || []
+        // Cache notifications to IndexedDB for offline access
+        cacheNotifications(userId, data || []).catch(err => {
+          console.warn('Failed to cache notifications:', err)
+        })
       } else {
         // Append new notifications, avoiding duplicates
         const existingIds = new Set(notifications.value.map(n => n.id))
@@ -109,6 +120,18 @@ export const useNotificationInboxStore = defineStore('notificationInbox', () => 
 
       return { success: true, data: data || [] }
     } catch (err) {
+      // Try to load from IndexedDB cache when offline
+      if (!navigator.onLine) {
+        try {
+          const cached = await getCachedNotifications(userId)
+          if (cached.length > 0) {
+            notifications.value = cached
+            return { success: true, data: cached, fromCache: true }
+          }
+        } catch (cacheErr) {
+          console.warn('Failed to load cached notifications:', cacheErr)
+        }
+      }
       error.value = err.message || 'Failed to fetch notifications'
       return { success: false, error: error.value }
     } finally {
@@ -433,6 +456,11 @@ export const useNotificationInboxStore = defineStore('notificationInbox', () => 
             if (!newNotification.read_at) {
               unreadCount.value++
             }
+            
+            // Add to IndexedDB cache
+            addNotificationToCache(newNotification).catch(err => {
+              console.warn('Failed to cache new notification:', err)
+            })
           }
         }
       )
@@ -464,6 +492,11 @@ export const useNotificationInboxStore = defineStore('notificationInbox', () => 
             }
             
             notifications.value[idx] = updatedNotification
+            
+            // Update in IndexedDB cache
+            updateNotificationInCache(updatedNotification).catch(err => {
+              console.warn('Failed to update cached notification:', err)
+            })
           }
         }
       )
@@ -487,6 +520,11 @@ export const useNotificationInboxStore = defineStore('notificationInbox', () => 
             }
             
             notifications.value.splice(idx, 1)
+            
+            // Remove from IndexedDB cache
+            removeNotificationFromCache(deletedNotification.id).catch(err => {
+              console.warn('Failed to remove cached notification:', err)
+            })
           }
         }
       )

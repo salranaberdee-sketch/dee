@@ -6,6 +6,7 @@ import Modal from '@/components/Modal.vue'
 import AthleteHistory from '@/components/AthleteHistory.vue'
 import AlbumSection from '@/components/AlbumSection.vue'
 import AthleteTrainingStats from '@/components/AthleteTrainingStats.vue'
+import UserAvatar from '@/components/UserAvatar.vue'
 
 const auth = useAuthStore()
 const data = useDataStore()
@@ -13,12 +14,15 @@ const data = useDataStore()
 const showModal = ref(false)
 const showDetailModal = ref(false)
 const editingId = ref(null)
+const editingAthlete = ref(null) // Store the athlete being edited for permission checks
 const selectedAthlete = ref(null)
 const athleteDocuments = ref([])
 const loadingDocs = ref(false)
 const activeTab = ref('info')
 const form = ref({ name: '', email: '', phone: '', coach_id: null, club_id: null })
 const searchQuery = ref('')
+const filterClub = ref('') // Admin filter by club
+const filterStatus = ref('') // Admin filter by status
 
 const documentTypes = {
   id_card: 'บัตรประชาชน',
@@ -39,12 +43,37 @@ const currentCoach = computed(() => {
   return null
 })
 
+// Admin: Count athletes by status
+const athleteStats = computed(() => {
+  if (!auth.isAdmin) return null
+  const all = data.athletes
+  return {
+    total: all.length,
+    approved: all.filter(a => a.registration_status === 'approved').length,
+    pending: all.filter(a => a.registration_status !== 'approved').length
+  }
+})
+
 const filteredAthletes = computed(() => {
   let result = data.athletes
   
   // Coach sees only their club's athletes
   if (auth.isCoach && currentCoach.value) {
     result = result.filter(a => a.club_id === currentCoach.value.club_id)
+  }
+  
+  // Admin: Filter by club
+  if (auth.isAdmin && filterClub.value) {
+    result = result.filter(a => a.club_id === filterClub.value)
+  }
+  
+  // Admin: Filter by status
+  if (auth.isAdmin && filterStatus.value) {
+    if (filterStatus.value === 'approved') {
+      result = result.filter(a => a.registration_status === 'approved')
+    } else if (filterStatus.value === 'pending') {
+      result = result.filter(a => a.registration_status !== 'approved')
+    }
   }
   
   if (searchQuery.value) {
@@ -54,8 +83,35 @@ const filteredAthletes = computed(() => {
   return result
 })
 
+/**
+ * Check if current user can edit this athlete
+ * Admin: can edit all
+ * Coach: can edit athletes in their club
+ */
+function canEditAthlete(athlete) {
+  if (auth.isAdmin) return true
+  if (auth.isCoach && currentCoach.value) {
+    return athlete.club_id === currentCoach.value.club_id
+  }
+  return false
+}
+
+/**
+ * Check if current user can delete this athlete
+ * Admin: can delete all
+ * Coach: can delete athletes in their club
+ */
+function canDeleteAthlete(athlete) {
+  if (auth.isAdmin) return true
+  if (auth.isCoach && currentCoach.value) {
+    return athlete.club_id === currentCoach.value.club_id
+  }
+  return false
+}
+
 function openAdd() {
   editingId.value = null
+  editingAthlete.value = null
   form.value = { 
     name: '', email: '', phone: '', 
     coach_id: currentCoach.value?.id || null,
@@ -65,7 +121,12 @@ function openAdd() {
 }
 
 function openEdit(athlete) {
+  if (!canEditAthlete(athlete)) {
+    alert('คุณไม่มีสิทธิ์แก้ไขนักกีฬานี้')
+    return
+  }
   editingId.value = athlete.id
+  editingAthlete.value = athlete
   form.value = { 
     name: athlete.name,
     email: athlete.email,
@@ -90,19 +151,87 @@ async function loadDocuments(athleteId) {
 }
 
 async function save() {
+  // Permission check before save
+  if (editingId.value && editingAthlete.value && !canEditAthlete(editingAthlete.value)) {
+    alert('คุณไม่มีสิทธิ์แก้ไขนักกีฬานี้')
+    return
+  }
+  
   if (editingId.value) {
-    await data.updateAthlete(editingId.value, form.value)
+    const result = await data.updateAthlete(editingId.value, form.value)
+    if (!result.success) {
+      alert(result.message || 'เกิดข้อผิดพลาดในการบันทึก')
+      return
+    }
   } else {
-    await data.addAthlete({ ...form.value })
+    const result = await data.addAthlete({ ...form.value })
+    if (!result.success) {
+      alert(result.message || 'เกิดข้อผิดพลาดในการเพิ่มนักกีฬา')
+      return
+    }
   }
   showModal.value = false
 }
 
 async function remove() {
+  // Permission check before delete
+  if (editingAthlete.value && !canDeleteAthlete(editingAthlete.value)) {
+    alert('คุณไม่มีสิทธิ์ลบนักกีฬานี้')
+    return
+  }
+  
   if (confirm('ยืนยันการลบนักกีฬานี้?')) {
-    await data.deleteAthlete(editingId.value)
+    const result = await data.deleteAthlete(editingId.value)
+    if (!result.success) {
+      alert(result.message || 'เกิดข้อผิดพลาดในการลบ')
+      return
+    }
     showModal.value = false
   }
+}
+
+/**
+ * Admin: Approve athlete registration
+ */
+async function approveAthlete(athlete) {
+  if (!auth.isAdmin) return
+  if (confirm(`ยืนยันอนุมัตินักกีฬา "${athlete.name}"?`)) {
+    const result = await data.updateAthlete(athlete.id, { registration_status: 'approved' })
+    if (result.success) {
+      // Update local state
+      if (selectedAthlete.value?.id === athlete.id) {
+        selectedAthlete.value.registration_status = 'approved'
+      }
+    } else {
+      alert(result.message || 'เกิดข้อผิดพลาด')
+    }
+  }
+}
+
+/**
+ * Admin: Reject/Revoke athlete registration
+ */
+async function rejectAthlete(athlete) {
+  if (!auth.isAdmin) return
+  if (confirm(`ยืนยันยกเลิกการอนุมัตินักกีฬา "${athlete.name}"?`)) {
+    const result = await data.updateAthlete(athlete.id, { registration_status: 'pending' })
+    if (result.success) {
+      if (selectedAthlete.value?.id === athlete.id) {
+        selectedAthlete.value.registration_status = 'pending'
+      }
+    } else {
+      alert(result.message || 'เกิดข้อผิดพลาด')
+    }
+  }
+}
+
+/**
+ * Admin: Clear all filters
+ */
+function clearFilters() {
+  filterClub.value = ''
+  filterStatus.value = ''
+  searchQuery.value = ''
 }
 
 async function verifyDocument(doc) {
@@ -136,6 +265,33 @@ function calculateAge(birthDate) {
   if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--
   return age + ' ปี'
 }
+
+/**
+ * Admin function to remove athlete's avatar
+ * Implements Requirement 6.2 - admin can remove user's profile picture
+ */
+async function removeAthleteAvatar() {
+  if (!auth.isAdmin) return
+  if (!selectedAthlete.value?.user_id) return
+  
+  if (!confirm('ยืนยันลบรูปโปรไฟล์ของนักกีฬานี้?')) return
+  
+  const result = await auth.adminRemoveUserAvatar(
+    selectedAthlete.value.user_id,
+    selectedAthlete.value.user_profiles?.avatar_url
+  )
+  
+  if (result.success) {
+    // Update local state to reflect the change
+    if (selectedAthlete.value.user_profiles) {
+      selectedAthlete.value.user_profiles.avatar_url = null
+    }
+    // Refresh athletes list to update the avatar in the grid
+    await data.fetchAthletes()
+  } else {
+    alert(result.message || 'เกิดข้อผิดพลาดในการลบรูปโปรไฟล์')
+  }
+}
 </script>
 
 <template>
@@ -153,7 +309,73 @@ function calculateAge(birthDate) {
       </button>
     </div>
 
+    <!-- Admin Stats Cards -->
+    <div v-if="auth.isAdmin && athleteStats" class="stats-row">
+      <div class="stat-card">
+        <div class="stat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
+          </svg>
+        </div>
+        <div class="stat-info">
+          <span class="stat-value">{{ athleteStats.total }}</span>
+          <span class="stat-label">นักกีฬาทั้งหมด</span>
+        </div>
+      </div>
+      <div class="stat-card stat-approved" @click="filterStatus = 'approved'">
+        <div class="stat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
+            <polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+        </div>
+        <div class="stat-info">
+          <span class="stat-value">{{ athleteStats.approved }}</span>
+          <span class="stat-label">อนุมัติแล้ว</span>
+        </div>
+      </div>
+      <div class="stat-card stat-pending" @click="filterStatus = 'pending'">
+        <div class="stat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14"/>
+          </svg>
+        </div>
+        <div class="stat-info">
+          <span class="stat-value">{{ athleteStats.pending }}</span>
+          <span class="stat-label">รอตรวจสอบ</span>
+        </div>
+      </div>
+    </div>
+
     <div class="container">
+      <!-- Admin Filters -->
+      <div v-if="auth.isAdmin" class="filters-row">
+        <div class="filter-group">
+          <label>ชมรม</label>
+          <select v-model="filterClub" class="filter-select">
+            <option value="">ทั้งหมด</option>
+            <option v-for="c in data.clubs" :key="c.id" :value="c.id">{{ c.name }}</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>สถานะ</label>
+          <select v-model="filterStatus" class="filter-select">
+            <option value="">ทั้งหมด</option>
+            <option value="approved">อนุมัติแล้ว</option>
+            <option value="pending">รอตรวจสอบ</option>
+          </select>
+        </div>
+        <button v-if="filterClub || filterStatus" class="btn-clear" @click="clearFilters">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+          ล้างตัวกรอง
+        </button>
+      </div>
+
       <div class="search-box">
         <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -173,9 +395,14 @@ function calculateAge(birthDate) {
       <div v-else class="athletes-grid">
         <div v-for="a in filteredAthletes" :key="a.id" class="athlete-card" @click="viewDetail(a)">
           <div class="card-header">
-            <div class="avatar">{{ a.name.charAt(0) }}</div>
+            <!-- UserAvatar for athlete list (Requirement 5.2) -->
+            <UserAvatar 
+              :avatar-url="a.user_profiles?.avatar_url" 
+              :user-name="a.name" 
+              size="md"
+            />
             <div class="card-actions">
-              <button class="btn-icon" @click.stop="openEdit(a)">
+              <button v-if="canEditAthlete(a)" class="btn-icon" @click.stop="openEdit(a)" title="แก้ไข">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
                   <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -235,7 +462,7 @@ function calculateAge(birthDate) {
         </form>
       </template>
       <template #footer>
-        <button v-if="editingId" class="btn-danger" @click="remove">ลบ</button>
+        <button v-if="editingId && editingAthlete && canDeleteAthlete(editingAthlete)" class="btn-danger" @click="remove">ลบ</button>
         <button class="btn-secondary" @click="showModal = false">ยกเลิก</button>
         <button class="btn-primary" @click="save">บันทึก</button>
       </template>
@@ -248,15 +475,58 @@ function calculateAge(birthDate) {
       </template>
       <template #body>
         <div class="detail-content">
-          <!-- Athlete Header -->
+          <!-- Athlete Header (Requirement 5.1 - Display athlete's avatar in read-only mode) -->
           <div class="detail-header">
-            <div class="avatar-large">{{ selectedAthlete?.name?.charAt(0) }}</div>
+            <div class="avatar-container">
+              <UserAvatar 
+                :avatar-url="selectedAthlete?.user_profiles?.avatar_url" 
+                :user-name="selectedAthlete?.name || ''" 
+                size="lg"
+              />
+              <!-- Admin remove avatar button (Requirement 6.2) -->
+              <button 
+                v-if="auth.isAdmin && selectedAthlete?.user_profiles?.avatar_url"
+                class="btn-remove-avatar"
+                @click.stop="removeAthleteAvatar"
+                title="ลบรูปโปรไฟล์"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                </svg>
+              </button>
+            </div>
             <div class="detail-info">
               <h3>{{ selectedAthlete?.name }}</h3>
               <p>{{ selectedAthlete?.email }}</p>
-              <span :class="['status-badge', selectedAthlete?.registration_status === 'approved' ? 'status-approved' : 'status-pending']">
-                {{ selectedAthlete?.registration_status === 'approved' ? 'อนุมัติแล้ว' : 'รอตรวจสอบ' }}
-              </span>
+              <div class="status-actions">
+                <span :class="['status-badge', selectedAthlete?.registration_status === 'approved' ? 'status-approved' : 'status-pending']">
+                  {{ selectedAthlete?.registration_status === 'approved' ? 'อนุมัติแล้ว' : 'รอตรวจสอบ' }}
+                </span>
+                <!-- Admin: Approve/Reject buttons -->
+                <template v-if="auth.isAdmin">
+                  <button 
+                    v-if="selectedAthlete?.registration_status !== 'approved'" 
+                    class="btn-sm btn-approve"
+                    @click="approveAthlete(selectedAthlete)"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                    อนุมัติ
+                  </button>
+                  <button 
+                    v-else 
+                    class="btn-sm btn-reject"
+                    @click="rejectAthlete(selectedAthlete)"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                    ยกเลิกอนุมัติ
+                  </button>
+                </template>
+              </div>
             </div>
           </div>
 
@@ -679,6 +949,38 @@ function calculateAge(birthDate) {
   margin-bottom: 16px;
 }
 
+/* Avatar container with remove button (Requirement 6.2) */
+.avatar-container {
+  position: relative;
+}
+
+.btn-remove-avatar {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  width: 24px;
+  height: 24px;
+  background: #EF4444;
+  color: #fff;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.2s;
+}
+
+.btn-remove-avatar:hover {
+  background: #DC2626;
+}
+
+.btn-remove-avatar svg {
+  width: 12px;
+  height: 12px;
+}
+
 .detail-info h3 {
   font-size: 20px;
   font-weight: 600;
@@ -872,11 +1174,160 @@ function calculateAge(birthDate) {
   font-size: 14px;
 }
 
+/* Admin Stats Row */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  background: #fff;
+  border: 1px solid #E5E5E5;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: box-shadow 0.2s;
+}
+
+.stat-card:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+.stat-card.stat-approved { border-left: 3px solid #22C55E; }
+.stat-card.stat-pending { border-left: 3px solid #F59E0B; }
+
+.stat-icon {
+  width: 44px;
+  height: 44px;
+  background: #171717;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stat-icon svg { width: 22px; height: 22px; color: #fff; }
+.stat-card.stat-approved .stat-icon { background: #22C55E; }
+.stat-card.stat-pending .stat-icon { background: #F59E0B; }
+
+.stat-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #171717;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: #737373;
+}
+
+/* Admin Filters */
+.filters-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.filter-group label {
+  font-size: 12px;
+  color: #737373;
+  font-weight: 500;
+}
+
+.filter-select {
+  padding: 8px 12px;
+  border: 1px solid #E5E5E5;
+  border-radius: 6px;
+  font-size: 14px;
+  min-width: 160px;
+  background: #fff;
+}
+
+.btn-clear {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid #E5E5E5;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #737373;
+  cursor: pointer;
+}
+
+.btn-clear:hover { background: #F5F5F5; color: #171717; }
+.btn-clear svg { width: 14px; height: 14px; }
+
+/* Status Actions */
+.status-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.btn-approve {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #22C55E;
+  color: #fff;
+  border: none;
+}
+
+.btn-approve:hover { background: #16A34A; }
+.btn-approve svg { width: 14px; height: 14px; }
+
+.btn-reject {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #fff;
+  color: #EF4444;
+  border: 1px solid #EF4444;
+}
+
+.btn-reject:hover { background: #FEF2F2; }
+.btn-reject svg { width: 14px; height: 14px; }
+
 @media (max-width: 768px) {
   .page-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 16px;
+  }
+
+  .stats-row {
+    grid-template-columns: 1fr;
+  }
+
+  .filters-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filter-select {
+    width: 100%;
   }
 
   .athletes-grid {
@@ -889,6 +1340,11 @@ function calculateAge(birthDate) {
 
   .tabs {
     overflow-x: auto;
+  }
+
+  .status-actions {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 </style>

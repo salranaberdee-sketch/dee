@@ -115,11 +115,23 @@
     - Handle 410 Gone response - remove invalid subscription
     - Handle other errors with logging
     - _Requirements: 4.4_
-  - [x]* 8.4 Write property test for target type filtering
+  - [x] 8.4 Write property test for target type filtering
+
+
+
+
+
+
 
     - **Property 6: Target type filtering correctness**
     - **Validates: Requirements 5.1, 5.2, 5.3, 5.4**
-  - [x]* 8.5 Write property test for invalid subscription cleanup
+  - [x] 8.5 Write property test for invalid subscription cleanup
+
+
+
+
+
+
 
     - **Property 9: Invalid subscription cleanup**
     - **Validates: Requirements 4.4**
@@ -141,7 +153,8 @@
     - Modify club application approval/rejection flow
     - Notify the applicant
     - _Requirements: 3.5_
-  - [x]* 9.5 Write property test for status change notification delivery
+  - [x] 9.5 Write property test for status change notification delivery
+
 
     - **Property 7: Status change notification delivery**
     - **Validates: Requirements 3.4, 3.5**
@@ -151,7 +164,13 @@
     - Modify logout flow in auth store
     - Call unsubscribeFromPush before clearing session
     - _Requirements: 4.2_
-  - [x]* 10.2 Write property test for logout subscription cleanup
+
+  - [x] 10.2 Write property test for logout subscription cleanup
+
+
+
+
+
 
 
     - **Property 8: Logout subscription cleanup**

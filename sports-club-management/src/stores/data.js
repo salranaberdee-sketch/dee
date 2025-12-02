@@ -179,15 +179,51 @@ export const useDataStore = defineStore('data', () => {
   }
 
   // ============ ATHLETES ============
+  
+  /**
+   * Helper: Fetch user profiles for athletes (avatar_url)
+   * Since athletes.user_id references auth.users, we need separate query
+   */
+  async function enrichAthletesWithProfiles(athletesList) {
+    if (!athletesList || athletesList.length === 0) return athletesList
+    
+    // Get unique user_ids that are not null
+    const userIds = [...new Set(athletesList.filter(a => a.user_id).map(a => a.user_id))]
+    if (userIds.length === 0) return athletesList
+    
+    // Fetch user_profiles for these user_ids
+    const { data: profiles } = await supabase
+      .from('user_profiles')
+      .select('id, avatar_url')
+      .in('id', userIds)
+    
+    // Create a map for quick lookup
+    const profileMap = new Map()
+    if (profiles) {
+      profiles.forEach(p => profileMap.set(p.id, p))
+    }
+    
+    // Enrich athletes with user_profiles data
+    return athletesList.map(athlete => ({
+      ...athlete,
+      user_profiles: athlete.user_id ? profileMap.get(athlete.user_id) || null : null
+    }))
+  }
+
   async function fetchAthletes() {
     loading.value = true
+    // Fetch athletes with clubs and coaches
     const { data, error: err } = await supabase
       .from('athletes')
       .select('*, clubs(name), coaches(name)')
       .order('created_at', { ascending: false })
     
-    if (!err) athletes.value = data || []
-    else error.value = err.message
+    if (!err) {
+      // Enrich with user_profiles (avatar_url) - Requirement 5.2
+      athletes.value = await enrichAthletesWithProfiles(data || [])
+    } else {
+      error.value = err.message
+    }
     loading.value = false
   }
 
@@ -199,8 +235,10 @@ export const useDataStore = defineStore('data', () => {
       .single()
     
     if (!err && data) {
-      athletes.value.unshift(data)
-      return { success: true, data }
+      // Enrich with user_profiles
+      const enriched = await enrichAthletesWithProfiles([data])
+      athletes.value.unshift(enriched[0])
+      return { success: true, data: enriched[0] }
     }
     return { success: false, message: err?.message }
   }
@@ -214,8 +252,10 @@ export const useDataStore = defineStore('data', () => {
       .single()
     
     if (!err && data) {
+      // Enrich with user_profiles
+      const enriched = await enrichAthletesWithProfiles([data])
       const idx = athletes.value.findIndex(a => a.id === id)
-      if (idx !== -1) athletes.value[idx] = data
+      if (idx !== -1) athletes.value[idx] = enriched[0]
       return { success: true }
     }
     return { success: false, message: err?.message }

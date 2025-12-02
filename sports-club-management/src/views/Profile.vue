@@ -6,6 +6,8 @@ import { useDataStore } from '@/stores/data'
 import { supabase } from '@/lib/supabase'
 import AthleteHistory from '@/components/AthleteHistory.vue'
 import AlbumSection from '@/components/AlbumSection.vue'
+import UserAvatar from '@/components/UserAvatar.vue'
+import ProfilePictureModal from '@/components/ProfilePictureModal.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -401,6 +403,23 @@ const menuItems = [
 ]
 
 const filteredMenu = computed(() => menuItems.filter(item => item.roles.includes(auth.profile?.role)))
+
+// Profile Picture Modal state (Requirements 1.1, 7.1, 7.2)
+const showProfilePictureModal = ref(false)
+
+function openProfilePictureModal() {
+  showProfilePictureModal.value = true
+}
+
+function closeProfilePictureModal() {
+  showProfilePictureModal.value = false
+}
+
+function handleAvatarUpdated(newAvatarUrl) {
+  // Profile is automatically updated by the auth store
+  // Just close the modal
+  closeProfilePictureModal()
+}
 </script>
 
 <template>
@@ -437,7 +456,14 @@ const filteredMenu = computed(() => menuItems.filter(item => item.roles.includes
       <div class="container">
         <!-- Profile Hero -->
         <div class="profile-hero">
-          <div class="avatar">{{ auth.profile?.name?.charAt(0) }}</div>
+          <!-- UserAvatar with xl size and edit indicator (Requirements 1.1, 3.1, 7.1) -->
+          <UserAvatar 
+            :avatar-url="auth.profile?.avatar_url" 
+            :user-name="auth.profile?.name || ''" 
+            size="xl"
+            :editable="true"
+            @click="openProfilePictureModal"
+          />
           <h2 class="profile-name">{{ auth.profile?.name }}</h2>
           <span :class="['badge', `badge-${auth.profile?.role}`]">{{ roleLabels[auth.profile?.role] }}</span>
           <p v-if="myClub" class="profile-club">{{ myClub.name }}</p>
@@ -821,6 +847,15 @@ const filteredMenu = computed(() => menuItems.filter(item => item.roles.includes
         </div>
       </main>
     </template>
+
+    <!-- Profile Picture Modal (Requirements 1.1, 7.2) -->
+    <ProfilePictureModal 
+      :is-open="showProfilePictureModal"
+      :current-avatar-url="auth.profile?.avatar_url"
+      :user-id="auth.user?.id"
+      @close="closeProfilePictureModal"
+      @updated="handleAvatarUpdated"
+    />
   </div>
 </template>
 
@@ -859,12 +894,10 @@ const filteredMenu = computed(() => menuItems.filter(item => item.roles.includes
 .profile-hero {
   text-align: center; padding: 32px 20px; margin-bottom: 20px;
   background: #fff; border-radius: 16px; border: 1px solid #E5E5E5;
+  display: flex; flex-direction: column; align-items: center;
 }
-.avatar {
-  width: 72px; height: 72px; margin: 0 auto 16px;
-  background: #171717; color: #fff; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 28px; font-weight: 600;
+.profile-hero .user-avatar {
+  margin-bottom: 16px;
 }
 .profile-name { font-size: 22px; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.02em; }
 .badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
