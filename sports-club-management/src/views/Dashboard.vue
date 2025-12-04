@@ -3,6 +3,8 @@ import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useDataStore } from '@/stores/data'
+import { getNextUpcomingSchedule } from '@/lib/scheduleUtils'
+import UpcomingScheduleBanner from '@/components/UpcomingScheduleBanner.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -32,6 +34,13 @@ const todaySchedule = computed(() => {
 
 const userName = computed(() => auth.profile?.name || 'ผู้ใช้')
 const userRole = computed(() => auth.profile?.role || 'athlete')
+
+// นัดหมายถัดไปสำหรับแบนเนอร์ (Requirements: 1.1, 2.1)
+const nextUpcomingSchedule = computed(() => {
+  // ใช้ club_id จาก auth store
+  const userClubId = auth.profile?.club_id || null
+  return getNextUpcomingSchedule(data.schedules, userClubId)
+})
 
 // Latest announcements
 const latestAnnouncements = computed(() => data.announcements.slice(0, 2))
@@ -152,6 +161,12 @@ const quickActions = computed(() => {
     </div>
 
     <div class="container">
+      <!-- Upcoming Schedule Banner (Requirements: 1.4, 2.4) -->
+      <UpcomingScheduleBanner 
+        :schedule="nextUpcomingSchedule"
+        @click="router.push('/schedules')"
+        class="upcoming-banner-wrapper"
+      />
       <!-- Today Alert -->
       <div v-if="todaySchedule" class="today-alert" @click="router.push('/schedules')">
         <div class="today-icon">
@@ -388,5 +403,10 @@ const quickActions = computed(() => {
   color: var(--gray-600);
   padding: 4px 8px;
   border-radius: 100px;
+}
+
+/* Upcoming Schedule Banner wrapper */
+.upcoming-banner-wrapper {
+  margin-bottom: 20px;
 }
 </style>

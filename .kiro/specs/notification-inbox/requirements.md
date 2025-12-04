@@ -4,6 +4,15 @@
 
 ระบบ Notification Inbox สำหรับแอปจัดการสโมสรกีฬา ช่วยให้ผู้ใช้สามารถดูประวัติการแจ้งเตือนย้อนหลัง จัดการสถานะอ่าน/ยังไม่อ่าน และลบการแจ้งเตือนที่ไม่ต้องการได้ ทำงานร่วมกับระบบ PWA Push Notifications ที่มีอยู่
 
+## Related Specs
+
+| Spec | ความสัมพันธ์ |
+|------|-------------|
+| `pwa-push-notifications` | ระบบส่ง Push Notifications (ต้นทาง) |
+| `notification-settings-enhancement` | ตั้งค่า Quiet Hours, เสียง, Vibration |
+
+> **หมายเหตุ:** Specs ทั้ง 3 ตัวนี้ทำงานร่วมกันเป็นระบบ Notification ที่สมบูรณ์
+
 ## Glossary
 
 - **Notification_Inbox**: ระบบเก็บและแสดงประวัติการแจ้งเตือนของผู้ใช้

@@ -1,7 +1,17 @@
 /**
- * Scoring Criteria Store
+ * Scoring Criteria Store (Legacy)
  * 
- * Manages scoring criteria and conditions for athlete evaluation.
+ * ระบบเกณฑ์คะแนนแบบเดิม - ใช้เป็น fallback เมื่อไม่มี Flexible Scoring Config
+ * 
+ * ความสัมพันธ์กับ stores อื่น:
+ * - scoringConfig.js = ระบบใหม่ (Flexible Scoring System) ที่ครอบคลุมกว่า
+ * - evaluation.js = ใช้ทั้งสอง stores โดยพยายามใช้ scoringConfig ก่อน แล้ว fallback มาที่นี่
+ * 
+ * ใช้ใน:
+ * - ScoringCriteriaSettings.vue (หน้าตั้งค่าแบบเดิม)
+ * - AthletePerformance.vue (แสดงผลงาน)
+ * - evaluation.js (คำนวณคะแนน - fallback)
+ * 
  * Implements Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8
  */
 

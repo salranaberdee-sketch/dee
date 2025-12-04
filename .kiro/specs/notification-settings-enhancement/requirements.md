@@ -4,6 +4,15 @@
 
 ระบบปรับปรุงการตั้งค่าการแจ้งเตือน (Notification Settings Enhancement) สำหรับแอปจัดการสโมสรกีฬา เพิ่มความสามารถในการตั้งเวลาไม่รบกวน (Quiet Hours) เลือกเสียงแจ้งเตือน และทดสอบการแจ้งเตือน ทำงานร่วมกับระบบ PWA Push Notifications และ Notification Inbox ที่มีอยู่
 
+## Related Specs
+
+| Spec | ความสัมพันธ์ |
+|------|-------------|
+| `pwa-push-notifications` | ระบบส่ง Push Notifications (ต้นทาง) |
+| `notification-inbox` | ดูประวัติและจัดการ Notifications |
+
+> **หมายเหตุ:** Specs ทั้ง 3 ตัวนี้ทำงานร่วมกันเป็นระบบ Notification ที่สมบูรณ์
+
 ## Glossary
 
 - **Notification_Settings**: ระบบตั้งค่าการแจ้งเตือนของผู้ใช้

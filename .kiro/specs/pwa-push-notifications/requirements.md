@@ -4,6 +4,15 @@
 
 ระบบ PWA Push Notifications สำหรับแอปจัดการสโมสรกีฬา ช่วยให้ผู้ใช้ได้รับการแจ้งเตือนเหตุการณ์สำคัญบนอุปกรณ์โดยตรง แม้ไม่ได้เปิดแอป รองรับการตั้งค่าเปิด/ปิดการแจ้งเตือนแต่ละประเภทตามความต้องการของผู้ใช้
 
+## Related Specs
+
+| Spec | ความสัมพันธ์ |
+|------|-------------|
+| `notification-inbox` | ดูประวัติและจัดการ Notifications |
+| `notification-settings-enhancement` | ตั้งค่า Quiet Hours, เสียง, Vibration |
+
+> **หมายเหตุ:** Specs ทั้ง 3 ตัวนี้ทำงานร่วมกันเป็นระบบ Notification ที่สมบูรณ์
+
 ## Glossary
 
 - **Push_Notification_System**: ระบบส่งการแจ้งเตือนไปยังอุปกรณ์ผู้ใช้ผ่าน Web Push API

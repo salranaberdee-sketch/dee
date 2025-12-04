@@ -1,7 +1,19 @@
 /**
- * Scoring Configuration Store
+ * Scoring Configuration Store (Flexible Scoring System)
  * 
- * จัดการการตั้งค่าเกณฑ์การให้คะแนนที่ยืดหยุ่นสำหรับแต่ละชมรม
+ * ระบบเกณฑ์คะแนนที่ยืดหยุ่น รองรับหลายประเภทกีฬา
+ * 
+ * ความสัมพันธ์กับ stores อื่น:
+ * - scoringCriteria.js = ระบบเดิม (legacy) ใช้เป็น fallback
+ * - evaluation.js = ใช้ store นี้เป็นหลัก ถ้าไม่มี config จะ fallback ไป scoringCriteria
+ * 
+ * ใช้ใน:
+ * - ScoringConfigView.vue (หน้าตั้งค่า Flexible Scoring)
+ * - ScoringConfigHistoryView.vue (ประวัติการเปลี่ยนแปลง)
+ * - ScoreCalculatorView.vue (เครื่องคำนวณคะแนน)
+ * - ConfigHistoryView.vue (component ประวัติ)
+ * - evaluation.js (คำนวณคะแนน - primary)
+ * 
  * Implements Requirements: 1.1, 1.2, 2.1, 2.2, 2.3, 2.4
  */
 
