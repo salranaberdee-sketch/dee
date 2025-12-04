@@ -285,7 +285,8 @@ function goToDetail(athlete) {
 
 // โหลดข้อมูล
 async function loadData() {
-  const clubId = authStore.profile?.club_id
+  // Admin ดูได้ทั้งหมด (clubId = null), Coach/Athlete ดูเฉพาะชมรมตัวเอง
+  const clubId = authStore.isAdmin ? null : authStore.profile?.club_id
   await evaluationStore.calculateAthleteStats(clubId, selectedMonth.value)
 }
 
