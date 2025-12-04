@@ -76,10 +76,15 @@ function calculateAge(birthDate) {
   return age
 }
 
-// Admin: Count athletes by status
+// นับจำนวนนักกีฬาตามสถานะ (ใช้ได้ทุก role)
 const athleteStats = computed(() => {
-  if (!auth.isAdmin) return null
-  const all = data.athletes
+  let all = [...data.athletes]
+  
+  // Coach เห็นเฉพาะนักกีฬาในชมรมตัวเอง
+  if (auth.isCoach && currentCoach.value) {
+    all = all.filter(a => a.club_id === currentCoach.value.club_id)
+  }
+  
   const approved = all.filter(a => a.registration_status === 'approved')
   const pending = all.filter(a => a.registration_status !== 'approved')
   
@@ -542,126 +547,44 @@ function exportToCSV() {
       </div>
     </div>
 
-    <!-- Admin Stats Cards -->
-    <div v-if="auth.isAdmin && athleteStats" class="stats-row">
-      <div class="stat-card" @click="clearFilters">
-        <div class="stat-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
-            <circle cx="9" cy="7" r="4"/>
-            <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
-          </svg>
-        </div>
-        <div class="stat-info">
-          <span class="stat-value">{{ athleteStats.total }}</span>
-          <span class="stat-label">นักกีฬาทั้งหมด</span>
-        </div>
+    <div class="container">
+      <!-- Clean Category Tabs -->
+      <div class="category-tabs">
+        <button 
+          :class="['cat-tab', { active: mainTab === 'pending' }]" 
+          @click="mainTab = 'pending'; selectedAthletes = []"
+        >
+          <span class="cat-tab-label">รอตรวจสอบ</span>
+          <span :class="['cat-tab-badge', 'badge-pending', { 'has-items': athleteStats.pending > 0 }]">
+            {{ athleteStats.pending }}
+          </span>
+        </button>
+        <button 
+          :class="['cat-tab', { active: mainTab === 'approved' }]" 
+          @click="mainTab = 'approved'; selectedAthletes = []"
+        >
+          <span class="cat-tab-label">อนุมัติแล้ว</span>
+          <span class="cat-tab-badge badge-approved">{{ athleteStats.approved }}</span>
+        </button>
+        <button 
+          :class="['cat-tab', { active: mainTab === 'all' }]" 
+          @click="mainTab = 'all'; selectedAthletes = []"
+        >
+          <span class="cat-tab-label">ทั้งหมด</span>
+          <span class="cat-tab-badge">{{ athleteStats.total }}</span>
+        </button>
       </div>
-      <div class="stat-card stat-approved" @click="filterStatus = 'approved'">
-        <div class="stat-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
-            <polyline points="22 4 12 14.01 9 11.01"/>
-          </svg>
-        </div>
-        <div class="stat-info">
-          <span class="stat-value">{{ athleteStats.approved }}</span>
-          <span class="stat-label">อนุมัติแล้ว</span>
-        </div>
-      </div>
-      <div class="stat-card stat-pending" @click="filterStatus = 'pending'">
-        <div class="stat-icon">
+
+      <!-- Pending Alert (แสดงเฉพาะเมื่อมีรอตรวจสอบ) -->
+      <div v-if="mainTab === 'pending' && athleteStats.pending > 0 && auth.isAdmin" class="pending-banner">
+        <div class="banner-content">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"/>
             <polyline points="12 6 12 12 16 14"/>
           </svg>
+          <span>มี {{ athleteStats.pending }} คนรอการอนุมัติ</span>
         </div>
-        <div class="stat-info">
-          <span class="stat-value">{{ athleteStats.pending }}</span>
-          <span class="stat-label">รอตรวจสอบ</span>
-        </div>
-      </div>
-      <div class="stat-card stat-age">
-        <div class="stat-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-            <line x1="16" y1="2" x2="16" y2="6"/>
-            <line x1="8" y1="2" x2="8" y2="6"/>
-            <line x1="3" y1="10" x2="21" y2="10"/>
-          </svg>
-        </div>
-        <div class="stat-info">
-          <span class="stat-value">{{ athleteStats.avgAge }}</span>
-          <span class="stat-label">อายุเฉลี่ย (ปี)</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="container">
-      <!-- Main Category Tabs - แยกหมวดหมู่ชัดเจน -->
-      <div class="main-tabs">
-        <button 
-          :class="['main-tab', { active: mainTab === 'pending' }]" 
-          @click="mainTab = 'pending'; selectedAthletes = []"
-        >
-          <div class="tab-icon pending-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"/>
-              <polyline points="12 6 12 12 16 14"/>
-            </svg>
-          </div>
-          <div class="tab-content">
-            <span class="tab-title">รอตรวจสอบ</span>
-            <span class="tab-count pending-count">{{ athleteStats?.pending || 0 }}</span>
-          </div>
-        </button>
-        <button 
-          :class="['main-tab', { active: mainTab === 'approved' }]" 
-          @click="mainTab = 'approved'; selectedAthletes = []"
-        >
-          <div class="tab-icon approved-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
-              <polyline points="22 4 12 14.01 9 11.01"/>
-            </svg>
-          </div>
-          <div class="tab-content">
-            <span class="tab-title">อนุมัติแล้ว</span>
-            <span class="tab-count approved-count">{{ athleteStats?.approved || 0 }}</span>
-          </div>
-        </button>
-        <button 
-          :class="['main-tab', { active: mainTab === 'all' }]" 
-          @click="mainTab = 'all'; selectedAthletes = []"
-        >
-          <div class="tab-icon all-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
-              <circle cx="9" cy="7" r="4"/>
-              <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
-            </svg>
-          </div>
-          <div class="tab-content">
-            <span class="tab-title">ทั้งหมด</span>
-            <span class="tab-count">{{ athleteStats?.total || 0 }}</span>
-          </div>
-        </button>
-      </div>
-
-      <!-- Pending Athletes Alert -->
-      <div v-if="mainTab === 'pending' && athleteStats?.pending > 0" class="pending-alert">
-        <div class="alert-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="12" y1="8" x2="12" y2="12"/>
-            <line x1="12" y1="16" x2="12.01" y2="16"/>
-          </svg>
-        </div>
-        <div class="alert-content">
-          <span class="alert-title">มีนักกีฬารอการอนุมัติ {{ athleteStats.pending }} คน</span>
-          <span class="alert-desc">กรุณาตรวจสอบข้อมูลและเอกสารก่อนอนุมัติ</span>
-        </div>
-        <button v-if="filteredAthletes.length > 0" class="btn-approve-all" @click="bulkApproveAll">
+        <button class="btn-approve-all-sm" @click="bulkApproveAll">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="20 6 9 17 4 12"/>
           </svg>
@@ -1416,189 +1339,132 @@ function exportToCSV() {
 .stat-value { font-size: 24px; font-weight: 700; color: #171717; }
 .stat-label { font-size: 13px; color: #737373; }
 
-/* Main Category Tabs */
-.main-tabs {
+/* Clean Category Tabs */
+.category-tabs {
   display: flex;
-  gap: 12px;
+  gap: 0;
   margin-bottom: 20px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid #E5E5E5;
+  background: #F5F5F5;
+  border-radius: 10px;
+  padding: 4px;
 }
 
-.main-tab {
+.cat-tab {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px 20px;
-  background: #fff;
-  border: 2px solid #E5E5E5;
-  border-radius: 12px;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 24px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
   flex: 1;
 }
 
-.main-tab:hover {
-  border-color: #A3A3A3;
+.cat-tab:hover {
+  background: rgba(255,255,255,0.5);
 }
 
-.main-tab.active {
-  border-color: #171717;
-  background: #171717;
+.cat-tab.active {
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
-.main-tab.active .tab-title,
-.main-tab.active .tab-count {
-  color: #fff;
+.cat-tab-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #737373;
 }
 
-.main-tab.active .tab-icon {
-  background: rgba(255,255,255,0.2);
+.cat-tab.active .cat-tab-label {
+  color: #171717;
+  font-weight: 600;
 }
 
-.main-tab.active .tab-icon svg {
-  color: #fff;
-}
-
-.tab-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  display: flex;
+.cat-tab-badge {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-}
-
-.tab-icon svg {
-  width: 20px;
-  height: 20px;
-}
-
-.tab-icon.pending-icon {
-  background: #FEF3C7;
-}
-
-.tab-icon.pending-icon svg {
-  color: #F59E0B;
-}
-
-.tab-icon.approved-icon {
-  background: #D1FAE5;
-}
-
-.tab-icon.approved-icon svg {
-  color: #22C55E;
-}
-
-.tab-icon.all-icon {
-  background: #F5F5F5;
-}
-
-.tab-icon.all-icon svg {
+  min-width: 24px;
+  height: 24px;
+  padding: 0 8px;
+  background: #E5E5E5;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
   color: #525252;
 }
 
-.tab-content {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.tab-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #171717;
-}
-
-.tab-count {
-  font-size: 20px;
-  font-weight: 700;
-  color: #171717;
-}
-
-.tab-count.pending-count {
-  color: #F59E0B;
-}
-
-.tab-count.approved-count {
-  color: #22C55E;
-}
-
-.main-tab.active .tab-count.pending-count,
-.main-tab.active .tab-count.approved-count {
-  color: #fff;
-}
-
-/* Pending Alert */
-.pending-alert {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px 20px;
+.cat-tab-badge.badge-pending {
   background: #FEF3C7;
-  border: 1px solid #F59E0B;
-  border-radius: 12px;
-  margin-bottom: 20px;
-}
-
-.alert-icon {
-  width: 44px;
-  height: 44px;
-  background: #F59E0B;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.alert-icon svg {
-  width: 22px;
-  height: 22px;
-  color: #fff;
-}
-
-.alert-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.alert-title {
-  font-size: 15px;
-  font-weight: 600;
   color: #92400E;
 }
 
-.alert-desc {
-  font-size: 13px;
-  color: #B45309;
+.cat-tab-badge.badge-pending.has-items {
+  background: #F59E0B;
+  color: #fff;
 }
 
-.btn-approve-all {
+.cat-tab-badge.badge-approved {
+  background: #D1FAE5;
+  color: #065F46;
+}
+
+.cat-tab.active .cat-tab-badge {
+  background: #171717;
+  color: #fff;
+}
+
+/* Pending Banner */
+.pending-banner {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 20px;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #FEF3C7;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.banner-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #92400E;
+}
+
+.banner-content svg {
+  width: 20px;
+  height: 20px;
+  color: #F59E0B;
+}
+
+.btn-approve-all-sm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
   background: #22C55E;
   color: #fff;
   border: none;
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: 6px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: background 0.2s;
-  white-space: nowrap;
 }
 
-.btn-approve-all:hover {
+.btn-approve-all-sm:hover {
   background: #16A34A;
 }
 
-.btn-approve-all svg {
-  width: 18px;
-  height: 18px;
+.btn-approve-all-sm svg {
+  width: 16px;
+  height: 16px;
 }
 
 /* Pending Card Style */
@@ -2664,38 +2530,25 @@ function exportToCSV() {
     grid-template-columns: repeat(2, 1fr);
   }
   
-  /* Main Tabs Mobile */
-  .main-tabs {
+  /* Category Tabs Mobile */
+  .category-tabs {
     flex-direction: column;
-    gap: 8px;
+    gap: 4px;
   }
   
-  .main-tab {
+  .cat-tab {
+    justify-content: space-between;
     padding: 12px 16px;
   }
   
-  .tab-icon {
-    width: 36px;
-    height: 36px;
-  }
-  
-  .tab-icon svg {
-    width: 18px;
-    height: 18px;
-  }
-  
-  .tab-count {
-    font-size: 18px;
-  }
-  
-  /* Pending Alert Mobile */
-  .pending-alert {
+  /* Pending Banner Mobile */
+  .pending-banner {
     flex-direction: column;
-    text-align: center;
     gap: 12px;
+    text-align: center;
   }
   
-  .btn-approve-all {
+  .btn-approve-all-sm {
     width: 100%;
     justify-content: center;
   }
