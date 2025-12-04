@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useDataStore } from '@/stores/data'
 import Modal from '@/components/Modal.vue'
@@ -11,18 +11,30 @@ import UserAvatar from '@/components/UserAvatar.vue'
 const auth = useAuthStore()
 const data = useDataStore()
 
+// UI State
 const showModal = ref(false)
 const showDetailModal = ref(false)
 const editingId = ref(null)
-const editingAthlete = ref(null) // Store the athlete being edited for permission checks
+const editingAthlete = ref(null)
 const selectedAthlete = ref(null)
 const athleteDocuments = ref([])
 const loadingDocs = ref(false)
 const activeTab = ref('info')
+const viewMode = ref('grid') // grid หรือ list
+const sortBy = ref('name') // name, created_at, status
+const sortOrder = ref('asc')
+const selectedAthletes = ref([]) // สำหรับ bulk actions
+const showBulkActions = ref(false)
+
+// Form State
 const form = ref({ name: '', email: '', phone: '', coach_id: null, club_id: null })
+
+// Filter State
 const searchQuery = ref('')
-const filterClub = ref('') // Admin filter by club
-const filterStatus = ref('') // Admin filter by status
+const filterClub = ref('')
+const filterStatus = ref('')
+const filterAgeGroup = ref('') // เพิ่ม filter ตามกลุ่มอายุ
+const filterDocStatus = ref('') // เพิ่ม filter ตามสถานะเอกสาร
 
 const documentTypes = {
   id_card: 'บัตรประชาชน',
@@ -31,6 +43,15 @@ const documentTypes = {
   parent_house_registration: 'ทะเบียนบ้านผู้ปกครอง',
   birth_certificate: 'สูติบัตร'
 }
+
+// กลุ่มอายุ
+const ageGroups = [
+  { value: 'under10', label: 'ต่ำกว่า 10 ปี', min: 0, max: 9 },
+  { value: '10-12', label: '10-12 ปี', min: 10, max: 12 },
+  { value: '13-15', label: '13-15 ปี', min: 13, max: 15 },
+  { value: '16-18', label: '16-18 ปี', min: 16, max: 18 },
+  { value: 'over18', label: 'มากกว่า 18 ปี', min: 19, max: 99 }
+]
 
 onMounted(async () => {
   await Promise.all([data.fetchAthletes(), data.fetchClubs(), data.fetchCoaches()])
@@ -43,19 +64,39 @@ const currentCoach = computed(() => {
   return null
 })
 
+// คำนวณอายุจากวันเกิด
+function calculateAge(birthDate) {
+  if (!birthDate) return null
+  const today = new Date()
+  const birth = new Date(birthDate)
+  let age = today.getFullYear() - birth.getFullYear()
+  const m = today.getMonth() - birth.getMonth()
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--
+  return age
+}
+
 // Admin: Count athletes by status
 const athleteStats = computed(() => {
   if (!auth.isAdmin) return null
   const all = data.athletes
+  const approved = all.filter(a => a.registration_status === 'approved')
+  const pending = all.filter(a => a.registration_status !== 'approved')
+  
+  // คำนวณอายุเฉลี่ย
+  const ages = all.map(a => calculateAge(a.birth_date)).filter(a => a !== null)
+  const avgAge = ages.length > 0 ? Math.round(ages.reduce((a, b) => a + b, 0) / ages.length) : 0
+  
   return {
     total: all.length,
-    approved: all.filter(a => a.registration_status === 'approved').length,
-    pending: all.filter(a => a.registration_status !== 'approved').length
+    approved: approved.length,
+    pending: pending.length,
+    avgAge
   }
 })
 
+// กรองและเรียงลำดับนักกีฬา
 const filteredAthletes = computed(() => {
-  let result = data.athletes
+  let result = [...data.athletes]
   
   // Coach sees only their club's athletes
   if (auth.isCoach && currentCoach.value) {
@@ -67,8 +108,8 @@ const filteredAthletes = computed(() => {
     result = result.filter(a => a.club_id === filterClub.value)
   }
   
-  // Admin: Filter by status
-  if (auth.isAdmin && filterStatus.value) {
+  // Filter by status
+  if (filterStatus.value) {
     if (filterStatus.value === 'approved') {
       result = result.filter(a => a.registration_status === 'approved')
     } else if (filterStatus.value === 'pending') {
@@ -76,17 +117,74 @@ const filteredAthletes = computed(() => {
     }
   }
   
+  // Filter by age group
+  if (filterAgeGroup.value) {
+    const group = ageGroups.find(g => g.value === filterAgeGroup.value)
+    if (group) {
+      result = result.filter(a => {
+        const age = calculateAge(a.birth_date)
+        return age !== null && age >= group.min && age <= group.max
+      })
+    }
+  }
+  
+  // Search
   if (searchQuery.value) {
     const q = searchQuery.value.toLowerCase()
-    result = result.filter(a => a.name.toLowerCase().includes(q) || a.email.toLowerCase().includes(q))
+    result = result.filter(a => 
+      a.name.toLowerCase().includes(q) || 
+      a.email.toLowerCase().includes(q) ||
+      a.phone?.toLowerCase().includes(q)
+    )
   }
+  
+  // Sort
+  result.sort((a, b) => {
+    let valA, valB
+    switch (sortBy.value) {
+      case 'name':
+        valA = a.name.toLowerCase()
+        valB = b.name.toLowerCase()
+        break
+      case 'created_at':
+        valA = new Date(a.created_at)
+        valB = new Date(b.created_at)
+        break
+      case 'status':
+        valA = a.registration_status === 'approved' ? 1 : 0
+        valB = b.registration_status === 'approved' ? 1 : 0
+        break
+      case 'age':
+        valA = calculateAge(a.birth_date) || 999
+        valB = calculateAge(b.birth_date) || 999
+        break
+      default:
+        valA = a.name.toLowerCase()
+        valB = b.name.toLowerCase()
+    }
+    
+    if (sortOrder.value === 'asc') {
+      return valA > valB ? 1 : -1
+    } else {
+      return valA < valB ? 1 : -1
+    }
+  })
+  
   return result
+})
+
+// จำนวน filters ที่ใช้งานอยู่
+const activeFiltersCount = computed(() => {
+  let count = 0
+  if (filterClub.value) count++
+  if (filterStatus.value) count++
+  if (filterAgeGroup.value) count++
+  if (filterDocStatus.value) count++
+  return count
 })
 
 /**
  * Check if current user can edit this athlete
- * Admin: can edit all
- * Coach: can edit athletes in their club
  */
 function canEditAthlete(athlete) {
   if (auth.isAdmin) return true
@@ -98,8 +196,6 @@ function canEditAthlete(athlete) {
 
 /**
  * Check if current user can delete this athlete
- * Admin: can delete all
- * Coach: can delete athletes in their club
  */
 function canDeleteAthlete(athlete) {
   if (auth.isAdmin) return true
@@ -151,7 +247,6 @@ async function loadDocuments(athleteId) {
 }
 
 async function save() {
-  // Permission check before save
   if (editingId.value && editingAthlete.value && !canEditAthlete(editingAthlete.value)) {
     alert('คุณไม่มีสิทธิ์แก้ไขนักกีฬานี้')
     return
@@ -174,7 +269,6 @@ async function save() {
 }
 
 async function remove() {
-  // Permission check before delete
   if (editingAthlete.value && !canDeleteAthlete(editingAthlete.value)) {
     alert('คุณไม่มีสิทธิ์ลบนักกีฬานี้')
     return
@@ -198,7 +292,6 @@ async function approveAthlete(athlete) {
   if (confirm(`ยืนยันอนุมัตินักกีฬา "${athlete.name}"?`)) {
     const result = await data.updateAthlete(athlete.id, { registration_status: 'approved' })
     if (result.success) {
-      // Update local state
       if (selectedAthlete.value?.id === athlete.id) {
         selectedAthlete.value.registration_status = 'approved'
       }
@@ -226,12 +319,82 @@ async function rejectAthlete(athlete) {
 }
 
 /**
- * Admin: Clear all filters
+ * Clear all filters
  */
 function clearFilters() {
   filterClub.value = ''
   filterStatus.value = ''
+  filterAgeGroup.value = ''
+  filterDocStatus.value = ''
   searchQuery.value = ''
+}
+
+/**
+ * Toggle sort order
+ */
+function toggleSort(field) {
+  if (sortBy.value === field) {
+    sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    sortBy.value = field
+    sortOrder.value = 'asc'
+  }
+}
+
+/**
+ * Bulk Actions - เลือก/ยกเลิกเลือกนักกีฬา
+ */
+function toggleSelectAthlete(athleteId) {
+  const idx = selectedAthletes.value.indexOf(athleteId)
+  if (idx > -1) {
+    selectedAthletes.value.splice(idx, 1)
+  } else {
+    selectedAthletes.value.push(athleteId)
+  }
+}
+
+function selectAllAthletes() {
+  if (selectedAthletes.value.length === filteredAthletes.value.length) {
+    selectedAthletes.value = []
+  } else {
+    selectedAthletes.value = filteredAthletes.value.map(a => a.id)
+  }
+}
+
+/**
+ * Bulk approve - อนุมัติหลายคนพร้อมกัน
+ */
+async function bulkApprove() {
+  if (!auth.isAdmin) return
+  if (selectedAthletes.value.length === 0) return
+  
+  if (confirm(`ยืนยันอนุมัตินักกีฬา ${selectedAthletes.value.length} คน?`)) {
+    for (const id of selectedAthletes.value) {
+      await data.updateAthlete(id, { registration_status: 'approved' })
+    }
+    selectedAthletes.value = []
+    await data.fetchAthletes()
+  }
+}
+
+/**
+ * Quick actions - โทรหานักกีฬา
+ */
+function callAthlete(phone, event) {
+  event.stopPropagation()
+  if (phone) {
+    window.location.href = `tel:${phone}`
+  }
+}
+
+/**
+ * Quick actions - ส่งอีเมล
+ */
+function emailAthlete(email, event) {
+  event.stopPropagation()
+  if (email) {
+    window.location.href = `mailto:${email}`
+  }
 }
 
 async function verifyDocument(doc) {
@@ -256,19 +419,14 @@ function formatDate(date) {
   return new Date(date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-function calculateAge(birthDate) {
-  if (!birthDate) return '-'
-  const today = new Date()
-  const birth = new Date(birthDate)
-  let age = today.getFullYear() - birth.getFullYear()
-  const m = today.getMonth() - birth.getMonth()
-  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--
+function formatAge(birthDate) {
+  const age = calculateAge(birthDate)
+  if (age === null) return '-'
   return age + ' ปี'
 }
 
 /**
  * Admin function to remove athlete's avatar
- * Implements Requirement 6.2 - admin can remove user's profile picture
  */
 async function removeAthleteAvatar() {
   if (!auth.isAdmin) return
@@ -282,36 +440,71 @@ async function removeAthleteAvatar() {
   )
   
   if (result.success) {
-    // Update local state to reflect the change
     if (selectedAthlete.value.user_profiles) {
       selectedAthlete.value.user_profiles.avatar_url = null
     }
-    // Refresh athletes list to update the avatar in the grid
     await data.fetchAthletes()
   } else {
     alert(result.message || 'เกิดข้อผิดพลาดในการลบรูปโปรไฟล์')
   }
 }
+
+/**
+ * Export athletes to CSV
+ */
+function exportToCSV() {
+  const headers = ['ชื่อ', 'อีเมล', 'เบอร์โทร', 'ชมรม', 'โค้ช', 'อายุ', 'สถานะ']
+  const rows = filteredAthletes.value.map(a => [
+    a.name,
+    a.email,
+    a.phone || '',
+    getClubName(a),
+    getCoachName(a),
+    formatAge(a.birth_date),
+    a.registration_status === 'approved' ? 'อนุมัติแล้ว' : 'รอตรวจสอบ'
+  ])
+  
+  const csvContent = [headers, ...rows]
+    .map(row => row.map(cell => `"${cell}"`).join(','))
+    .join('\n')
+  
+  const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' })
+  const link = document.createElement('a')
+  link.href = URL.createObjectURL(blob)
+  link.download = `athletes_${new Date().toISOString().split('T')[0]}.csv`
+  link.click()
+}
 </script>
 
 <template>
   <div class="athletes-page">
+    <!-- Page Header -->
     <div class="page-header">
       <div>
         <h1 class="page-title">นักกีฬา</h1>
         <p class="subtitle">จัดการข้อมูลนักกีฬาและเอกสาร</p>
       </div>
-      <button class="btn-primary" @click="openAdd">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 5v14M5 12h14"/>
-        </svg>
-        เพิ่มนักกีฬา
-      </button>
+      <div class="header-actions">
+        <button v-if="auth.isAdmin" class="btn-secondary" @click="exportToCSV" title="ส่งออก CSV">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          ส่งออก
+        </button>
+        <button class="btn-primary" @click="openAdd">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+          เพิ่มนักกีฬา
+        </button>
+      </div>
     </div>
 
     <!-- Admin Stats Cards -->
     <div v-if="auth.isAdmin && athleteStats" class="stats-row">
-      <div class="stat-card">
+      <div class="stat-card" @click="clearFilters">
         <div class="stat-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
@@ -348,12 +541,73 @@ async function removeAthleteAvatar() {
           <span class="stat-label">รอตรวจสอบ</span>
         </div>
       </div>
+      <div class="stat-card stat-age">
+        <div class="stat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+            <line x1="16" y1="2" x2="16" y2="6"/>
+            <line x1="8" y1="2" x2="8" y2="6"/>
+            <line x1="3" y1="10" x2="21" y2="10"/>
+          </svg>
+        </div>
+        <div class="stat-info">
+          <span class="stat-value">{{ athleteStats.avgAge }}</span>
+          <span class="stat-label">อายุเฉลี่ย (ปี)</span>
+        </div>
+      </div>
     </div>
 
     <div class="container">
-      <!-- Admin Filters -->
-      <div v-if="auth.isAdmin" class="filters-row">
-        <div class="filter-group">
+      <!-- Toolbar: Search + Filters + View Toggle -->
+      <div class="toolbar">
+        <div class="search-box">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input v-model="searchQuery" type="text" class="search-input" placeholder="ค้นหาชื่อ, อีเมล, เบอร์โทร..." />
+        </div>
+        
+        <div class="toolbar-actions">
+          <!-- View Mode Toggle -->
+          <div class="view-toggle">
+            <button :class="['toggle-btn', { active: viewMode === 'grid' }]" @click="viewMode = 'grid'" title="แสดงแบบ Grid">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+              </svg>
+            </button>
+            <button :class="['toggle-btn', { active: viewMode === 'list' }]" @click="viewMode = 'list'" title="แสดงแบบ List">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/>
+                <line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/>
+                <line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+              </svg>
+            </button>
+          </div>
+          
+          <!-- Sort Dropdown -->
+          <div class="sort-dropdown">
+            <select v-model="sortBy" class="sort-select">
+              <option value="name">เรียงตามชื่อ</option>
+              <option value="created_at">เรียงตามวันที่สมัคร</option>
+              <option value="status">เรียงตามสถานะ</option>
+              <option value="age">เรียงตามอายุ</option>
+            </select>
+            <button class="sort-order-btn" @click="sortOrder = sortOrder === 'asc' ? 'desc' : 'asc'">
+              <svg v-if="sortOrder === 'asc'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 19V5M5 12l7-7 7 7"/>
+              </svg>
+              <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 5v14M5 12l7 7 7-7"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filters Row -->
+      <div class="filters-row">
+        <div v-if="auth.isAdmin" class="filter-group">
           <label>ชมรม</label>
           <select v-model="filterClub" class="filter-select">
             <option value="">ทั้งหมด</option>
@@ -368,40 +622,68 @@ async function removeAthleteAvatar() {
             <option value="pending">รอตรวจสอบ</option>
           </select>
         </div>
-        <button v-if="filterClub || filterStatus" class="btn-clear" @click="clearFilters">
+        <div class="filter-group">
+          <label>กลุ่มอายุ</label>
+          <select v-model="filterAgeGroup" class="filter-select">
+            <option value="">ทั้งหมด</option>
+            <option v-for="g in ageGroups" :key="g.value" :value="g.value">{{ g.label }}</option>
+          </select>
+        </div>
+        <button v-if="activeFiltersCount > 0" class="btn-clear" @click="clearFilters">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
           </svg>
-          ล้างตัวกรอง
+          ล้างตัวกรอง ({{ activeFiltersCount }})
         </button>
       </div>
 
-      <div class="search-box">
-        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-        </svg>
-        <input v-model="searchQuery" type="text" class="search-input" placeholder="ค้นหานักกีฬา..." />
+      <!-- Bulk Actions Bar -->
+      <div v-if="auth.isAdmin && selectedAthletes.length > 0" class="bulk-actions-bar">
+        <div class="bulk-info">
+          <span>เลือก {{ selectedAthletes.length }} คน</span>
+          <button class="btn-link" @click="selectedAthletes = []">ยกเลิกทั้งหมด</button>
+        </div>
+        <div class="bulk-buttons">
+          <button class="btn-bulk btn-approve-bulk" @click="bulkApprove">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            อนุมัติทั้งหมด
+          </button>
+        </div>
       </div>
 
+      <!-- Results Info -->
+      <div class="results-info">
+        <span>พบ {{ filteredAthletes.length }} คน</span>
+        <label v-if="auth.isAdmin && viewMode === 'list'" class="select-all-label">
+          <input type="checkbox" :checked="selectedAthletes.length === filteredAthletes.length && filteredAthletes.length > 0" @change="selectAllAthletes" />
+          เลือกทั้งหมด
+        </label>
+      </div>
+
+      <!-- Empty State -->
       <div v-if="filteredAthletes.length === 0" class="empty-state">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
           <circle cx="9" cy="7" r="4"/>
         </svg>
-        <p>{{ searchQuery ? 'ไม่พบนักกีฬา' : 'ยังไม่มีนักกีฬา' }}</p>
-        <button v-if="!searchQuery" class="btn-primary" @click="openAdd">เพิ่มนักกีฬาแรก</button>
+        <p>{{ searchQuery || activeFiltersCount > 0 ? 'ไม่พบนักกีฬาตามเงื่อนไข' : 'ยังไม่มีนักกีฬา' }}</p>
+        <button v-if="!searchQuery && activeFiltersCount === 0" class="btn-primary" @click="openAdd">เพิ่มนักกีฬาแรก</button>
+        <button v-else class="btn-secondary" @click="clearFilters">ล้างตัวกรอง</button>
       </div>
 
-      <div v-else class="athletes-grid">
+      <!-- Grid View -->
+      <div v-else-if="viewMode === 'grid'" class="athletes-grid">
         <div v-for="a in filteredAthletes" :key="a.id" class="athlete-card" @click="viewDetail(a)">
           <div class="card-header">
-            <!-- UserAvatar for athlete list (Requirement 5.2) -->
-            <UserAvatar 
-              :avatar-url="a.user_profiles?.avatar_url" 
-              :user-name="a.name" 
-              size="md"
-            />
+            <UserAvatar :avatar-url="a.user_profiles?.avatar_url" :user-name="a.name" size="md" />
             <div class="card-actions">
+              <button v-if="a.phone" class="btn-icon btn-quick" @click="callAthlete(a.phone, $event)" title="โทร">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/>
+                </svg>
+              </button>
               <button v-if="canEditAthlete(a)" class="btn-icon" @click.stop="openEdit(a)" title="แก้ไข">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
@@ -416,12 +698,179 @@ async function removeAthleteAvatar() {
             <div class="athlete-meta">
               <span v-if="auth.isAdmin" class="meta-item">{{ getClubName(a) }}</span>
               <span class="meta-item">โค้ช: {{ getCoachName(a) }}</span>
+              <span v-if="a.birth_date" class="meta-item meta-age">{{ formatAge(a.birth_date) }}</span>
             </div>
             <div class="card-footer">
               <span :class="['status-badge', a.registration_status === 'approved' ? 'status-approved' : 'status-pending']">
                 {{ a.registration_status === 'approved' ? 'อนุมัติแล้ว' : 'รอตรวจสอบ' }}
               </span>
               <span class="view-detail">ดูรายละเอียด →</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- List View - Table Style -->
+      <div v-else class="athletes-table-wrapper">
+        <table class="athletes-table">
+          <thead>
+            <tr>
+              <th v-if="auth.isAdmin" class="th-select">
+                <input type="checkbox" :checked="selectedAthletes.length === filteredAthletes.length && filteredAthletes.length > 0" @change="selectAllAthletes" />
+              </th>
+              <th class="th-name sortable" @click="toggleSort('name')">
+                <span>นักกีฬา</span>
+                <svg v-if="sortBy === 'name'" class="sort-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path v-if="sortOrder === 'asc'" d="M12 19V5M5 12l7-7 7 7"/>
+                  <path v-else d="M12 5v14M5 12l7 7 7-7"/>
+                </svg>
+              </th>
+              <th class="th-phone">เบอร์โทร</th>
+              <th v-if="auth.isAdmin" class="th-club">ชมรม</th>
+              <th class="th-coach">โค้ช</th>
+              <th class="th-age sortable" @click="toggleSort('age')">
+                <span>อายุ</span>
+                <svg v-if="sortBy === 'age'" class="sort-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path v-if="sortOrder === 'asc'" d="M12 19V5M5 12l7-7 7 7"/>
+                  <path v-else d="M12 5v14M5 12l7 7 7-7"/>
+                </svg>
+              </th>
+              <th class="th-status sortable" @click="toggleSort('status')">
+                <span>สถานะ</span>
+                <svg v-if="sortBy === 'status'" class="sort-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path v-if="sortOrder === 'asc'" d="M12 19V5M5 12l7-7 7 7"/>
+                  <path v-else d="M12 5v14M5 12l7 7 7-7"/>
+                </svg>
+              </th>
+              <th class="th-actions">จัดการ</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="a in filteredAthletes" :key="a.id" class="table-row" @click="viewDetail(a)">
+              <td v-if="auth.isAdmin" class="td-select" @click.stop>
+                <input type="checkbox" :checked="selectedAthletes.includes(a.id)" @change="toggleSelectAthlete(a.id)" />
+              </td>
+              <td class="td-name">
+                <div class="athlete-info">
+                  <UserAvatar :avatar-url="a.user_profiles?.avatar_url" :user-name="a.name" size="sm" />
+                  <div class="athlete-details">
+                    <span class="athlete-name-text">{{ a.name }}</span>
+                    <span class="athlete-email-text">{{ a.email }}</span>
+                  </div>
+                </div>
+              </td>
+              <td class="td-phone">
+                <div class="phone-cell">
+                  <span class="phone-number">{{ a.phone || '-' }}</span>
+                  <div v-if="a.phone" class="phone-actions">
+                    <button class="btn-phone" @click="callAthlete(a.phone, $event)" title="โทร">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </td>
+              <td v-if="auth.isAdmin" class="td-club">
+                <span class="club-name">{{ getClubName(a) }}</span>
+              </td>
+              <td class="td-coach">{{ getCoachName(a) }}</td>
+              <td class="td-age">
+                <span v-if="a.birth_date" class="age-badge">{{ formatAge(a.birth_date) }}</span>
+                <span v-else class="no-data">-</span>
+              </td>
+              <td class="td-status">
+                <span :class="['status-pill', a.registration_status === 'approved' ? 'status-approved' : 'status-pending']">
+                  <svg v-if="a.registration_status === 'approved'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                  <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                  </svg>
+                  {{ a.registration_status === 'approved' ? 'อนุมัติ' : 'รอตรวจสอบ' }}
+                </span>
+              </td>
+              <td class="td-actions" @click.stop>
+                <div class="action-buttons">
+                  <button class="btn-action" @click="emailAthlete(a.email, $event)" title="ส่งอีเมล">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                      <polyline points="22,6 12,13 2,6"/>
+                    </svg>
+                  </button>
+                  <button v-if="canEditAthlete(a)" class="btn-action" @click="openEdit(a)" title="แก้ไข">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                      <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                    </svg>
+                  </button>
+                  <button class="btn-action btn-view" @click.stop="viewDetail(a)" title="ดูรายละเอียด">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                      <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Mobile List View - แสดงเฉพาะบน mobile เมื่อเลือก list view -->
+      <div v-if="viewMode === 'list'" class="mobile-list-container">
+        <div v-for="a in filteredAthletes" :key="'m-'+a.id" class="mobile-card" @click="viewDetail(a)">
+          <div class="mobile-card-header">
+            <div class="mobile-select" v-if="auth.isAdmin" @click.stop>
+              <input type="checkbox" :checked="selectedAthletes.includes(a.id)" @change="toggleSelectAthlete(a.id)" />
+            </div>
+            <UserAvatar :avatar-url="a.user_profiles?.avatar_url" :user-name="a.name" size="md" />
+            <div class="mobile-info">
+              <span class="mobile-name">{{ a.name }}</span>
+              <span class="mobile-email">{{ a.email }}</span>
+            </div>
+            <span :class="['status-dot', a.registration_status === 'approved' ? 'dot-approved' : 'dot-pending']"></span>
+          </div>
+          <div class="mobile-card-body">
+            <div class="mobile-row">
+              <span class="mobile-label">เบอร์โทร</span>
+              <span class="mobile-value">{{ a.phone || '-' }}</span>
+            </div>
+            <div v-if="auth.isAdmin" class="mobile-row">
+              <span class="mobile-label">ชมรม</span>
+              <span class="mobile-value">{{ getClubName(a) }}</span>
+            </div>
+            <div class="mobile-row">
+              <span class="mobile-label">โค้ช</span>
+              <span class="mobile-value">{{ getCoachName(a) }}</span>
+            </div>
+            <div class="mobile-row">
+              <span class="mobile-label">อายุ</span>
+              <span class="mobile-value">{{ formatAge(a.birth_date) }}</span>
+            </div>
+          </div>
+          <div class="mobile-card-footer">
+            <span :class="['status-badge', a.registration_status === 'approved' ? 'status-approved' : 'status-pending']">
+              {{ a.registration_status === 'approved' ? 'อนุมัติแล้ว' : 'รอตรวจสอบ' }}
+            </span>
+            <div class="mobile-actions" @click.stop>
+              <button v-if="a.phone" class="btn-mobile" @click="callAthlete(a.phone, $event)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/>
+                </svg>
+              </button>
+              <button class="btn-mobile" @click="emailAthlete(a.email, $event)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                  <polyline points="22,6 12,13 2,6"/>
+                </svg>
+              </button>
+              <button v-if="canEditAthlete(a)" class="btn-mobile" @click="openEdit(a)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                  <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </svg>
+              </button>
             </div>
           </div>
         </div>
@@ -475,21 +924,11 @@ async function removeAthleteAvatar() {
       </template>
       <template #body>
         <div class="detail-content">
-          <!-- Athlete Header (Requirement 5.1 - Display athlete's avatar in read-only mode) -->
+          <!-- Athlete Header -->
           <div class="detail-header">
             <div class="avatar-container">
-              <UserAvatar 
-                :avatar-url="selectedAthlete?.user_profiles?.avatar_url" 
-                :user-name="selectedAthlete?.name || ''" 
-                size="lg"
-              />
-              <!-- Admin remove avatar button (Requirement 6.2) -->
-              <button 
-                v-if="auth.isAdmin && selectedAthlete?.user_profiles?.avatar_url"
-                class="btn-remove-avatar"
-                @click.stop="removeAthleteAvatar"
-                title="ลบรูปโปรไฟล์"
-              >
+              <UserAvatar :avatar-url="selectedAthlete?.user_profiles?.avatar_url" :user-name="selectedAthlete?.name || ''" size="lg" />
+              <button v-if="auth.isAdmin && selectedAthlete?.user_profiles?.avatar_url" class="btn-remove-avatar" @click.stop="removeAthleteAvatar" title="ลบรูปโปรไฟล์">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polyline points="3 6 5 6 21 6"/>
                   <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -503,29 +942,34 @@ async function removeAthleteAvatar() {
                 <span :class="['status-badge', selectedAthlete?.registration_status === 'approved' ? 'status-approved' : 'status-pending']">
                   {{ selectedAthlete?.registration_status === 'approved' ? 'อนุมัติแล้ว' : 'รอตรวจสอบ' }}
                 </span>
-                <!-- Admin: Approve/Reject buttons -->
                 <template v-if="auth.isAdmin">
-                  <button 
-                    v-if="selectedAthlete?.registration_status !== 'approved'" 
-                    class="btn-sm btn-approve"
-                    @click="approveAthlete(selectedAthlete)"
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <polyline points="20 6 9 17 4 12"/>
-                    </svg>
+                  <button v-if="selectedAthlete?.registration_status !== 'approved'" class="btn-sm btn-approve" @click="approveAthlete(selectedAthlete)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
                     อนุมัติ
                   </button>
-                  <button 
-                    v-else 
-                    class="btn-sm btn-reject"
-                    @click="rejectAthlete(selectedAthlete)"
-                  >
+                  <button v-else class="btn-sm btn-reject" @click="rejectAthlete(selectedAthlete)">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                     </svg>
                     ยกเลิกอนุมัติ
                   </button>
                 </template>
+              </div>
+              <!-- Quick Contact -->
+              <div class="quick-contact">
+                <button v-if="selectedAthlete?.phone" class="btn-contact-lg" @click="callAthlete(selectedAthlete.phone, $event)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/>
+                  </svg>
+                  {{ selectedAthlete.phone }}
+                </button>
+                <button class="btn-contact-lg" @click="emailAthlete(selectedAthlete?.email, $event)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                    <polyline points="22,6 12,13 2,6"/>
+                  </svg>
+                  ส่งอีเมล
+                </button>
               </div>
             </div>
           </div>
@@ -534,8 +978,7 @@ async function removeAthleteAvatar() {
           <div class="tabs">
             <button :class="['tab', { active: activeTab === 'info' }]" @click="activeTab = 'info'">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
-                <circle cx="12" cy="7" r="4"/>
+                <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
               </svg>
               ข้อมูลส่วนตัว
             </button>
@@ -555,16 +998,14 @@ async function removeAthleteAvatar() {
             <button :class="['tab', { active: activeTab === 'albums' }]" @click="activeTab = 'albums'">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                <circle cx="8.5" cy="8.5" r="1.5"/>
-                <polyline points="21 15 16 10 5 21"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
               </svg>
               อัลบั้มรูปภาพ
             </button>
             <button v-if="auth.isCoach || auth.isAdmin" :class="['tab', { active: activeTab === 'training' }]" @click="activeTab = 'training'">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/>
-                <rect x="8" y="2" width="8" height="4" rx="1"/>
-                <path d="M9 14l2 2 4-4"/>
+                <rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 14l2 2 4-4"/>
               </svg>
               สถิติการฝึก
             </button>
@@ -591,7 +1032,7 @@ async function removeAthleteAvatar() {
               </div>
               <div class="info-item">
                 <span class="label">อายุ</span>
-                <span class="value">{{ calculateAge(selectedAthlete?.birth_date) }}</span>
+                <span class="value">{{ formatAge(selectedAthlete?.birth_date) }}</span>
               </div>
               <div class="info-item">
                 <span class="label">กรุ๊ปเลือด</span>
@@ -660,14 +1101,11 @@ async function removeAthleteAvatar() {
                     </svg>
                     ยืนยันแล้ว
                   </span>
-                  <button v-else-if="auth.isAdmin" class="btn-sm btn-verify" @click="verifyDocument(doc)">
-                    ยืนยันเอกสาร
-                  </button>
+                  <button v-else-if="auth.isAdmin" class="btn-sm btn-verify" @click="verifyDocument(doc)">ยืนยันเอกสาร</button>
                   <a v-if="doc.file_url" :href="doc.file_url" target="_blank" class="btn-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/>
-                      <polyline points="15 3 21 3 21 9"/>
-                      <line x1="10" y1="14" x2="21" y2="3"/>
+                      <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
                     </svg>
                   </a>
                 </div>
@@ -682,28 +1120,19 @@ async function removeAthleteAvatar() {
 
           <!-- Albums Tab -->
           <div v-if="activeTab === 'albums'" class="tab-content">
-            <AlbumSection 
-              v-if="selectedAthlete?.user_id" 
-              :user-id="selectedAthlete.user_id" 
-              :read-only="true"
-            />
+            <AlbumSection v-if="selectedAthlete?.user_id" :user-id="selectedAthlete.user_id" :read-only="true" />
             <div v-else class="empty-docs">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                <circle cx="8.5" cy="8.5" r="1.5"/>
-                <polyline points="21 15 16 10 5 21"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
               </svg>
               <p>ไม่พบข้อมูลอัลบั้ม</p>
             </div>
           </div>
 
-          <!-- Training Stats Tab - Requirements 5.1, 5.2 -->
+          <!-- Training Stats Tab -->
           <div v-if="activeTab === 'training'" class="tab-content">
-            <AthleteTrainingStats 
-              v-if="selectedAthlete?.user_id" 
-              :athlete-id="selectedAthlete.id"
-              :user-id="selectedAthlete.user_id"
-            />
+            <AthleteTrainingStats v-if="selectedAthlete?.user_id" :athlete-id="selectedAthlete.id" :user-id="selectedAthlete.user_id" />
             <div v-else class="empty-docs">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/>
@@ -718,11 +1147,10 @@ async function removeAthleteAvatar() {
   </div>
 </template>
 
-
 <style scoped>
 .athletes-page {
   padding: 24px;
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
 }
 
@@ -745,6 +1173,11 @@ async function removeAthleteAvatar() {
   margin: 4px 0 0;
 }
 
+.header-actions {
+  display: flex;
+  gap: 12px;
+}
+
 .btn-primary {
   display: flex;
   align-items: center;
@@ -756,22 +1189,28 @@ async function removeAthleteAvatar() {
   border-radius: 8px;
   font-size: 14px;
   cursor: pointer;
+  transition: background 0.2s;
 }
 
 .btn-primary:hover { background: #262626; }
 .btn-primary svg { width: 18px; height: 18px; }
 
 .btn-secondary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   background: #fff;
   color: #171717;
   border: 1px solid #E5E5E5;
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-size: 13px;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
   cursor: pointer;
+  transition: all 0.2s;
 }
 
 .btn-secondary:hover { background: #F5F5F5; }
+.btn-secondary svg { width: 18px; height: 18px; }
 
 .btn-danger {
   background: #EF4444;
@@ -791,16 +1230,76 @@ async function removeAthleteAvatar() {
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: all 0.2s;
 }
 
 .btn-icon svg { width: 16px; height: 16px; }
 .btn-icon:hover { background: #F5F5F5; }
 
-.container { max-width: 100%; }
+.btn-quick {
+  background: #F5F5F5;
+  border: none;
+}
+
+.btn-quick:hover { background: #E5E5E5; }
+
+/* Stats Row */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  background: #fff;
+  border: 1px solid #E5E5E5;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.stat-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+.stat-card.stat-approved { border-left: 3px solid #22C55E; }
+.stat-card.stat-pending { border-left: 3px solid #F59E0B; }
+.stat-card.stat-age { border-left: 3px solid #3B82F6; }
+
+.stat-icon {
+  width: 44px;
+  height: 44px;
+  background: #171717;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stat-icon svg { width: 22px; height: 22px; color: #fff; }
+.stat-card.stat-approved .stat-icon { background: #22C55E; }
+.stat-card.stat-pending .stat-icon { background: #F59E0B; }
+.stat-card.stat-age .stat-icon { background: #3B82F6; }
+
+.stat-info { display: flex; flex-direction: column; }
+.stat-value { font-size: 24px; font-weight: 700; color: #171717; }
+.stat-label { font-size: 13px; color: #737373; }
+
+/* Toolbar */
+.toolbar {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
 
 .search-box {
   position: relative;
-  margin-bottom: 20px;
+  flex: 1;
+  min-width: 250px;
 }
 
 .search-icon {
@@ -821,6 +1320,185 @@ async function removeAthleteAvatar() {
   font-size: 14px;
 }
 
+.search-input:focus {
+  outline: none;
+  border-color: #171717;
+}
+
+.toolbar-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.view-toggle {
+  display: flex;
+  background: #F5F5F5;
+  border-radius: 8px;
+  padding: 2px;
+}
+
+.toggle-btn {
+  background: transparent;
+  border: none;
+  padding: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.toggle-btn svg { width: 18px; height: 18px; color: #737373; }
+.toggle-btn.active { background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.toggle-btn.active svg { color: #171717; }
+
+.sort-dropdown {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sort-select {
+  padding: 8px 12px;
+  border: 1px solid #E5E5E5;
+  border-radius: 6px;
+  font-size: 13px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.sort-order-btn {
+  background: #F5F5F5;
+  border: none;
+  padding: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sort-order-btn svg { width: 16px; height: 16px; }
+.sort-order-btn:hover { background: #E5E5E5; }
+
+/* Filters Row */
+.filters-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.filter-group label {
+  font-size: 12px;
+  color: #737373;
+  font-weight: 500;
+}
+
+.filter-select {
+  padding: 8px 12px;
+  border: 1px solid #E5E5E5;
+  border-radius: 6px;
+  font-size: 14px;
+  min-width: 140px;
+  background: #fff;
+}
+
+.btn-clear {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid #E5E5E5;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #737373;
+  cursor: pointer;
+}
+
+.btn-clear:hover { background: #F5F5F5; color: #171717; }
+.btn-clear svg { width: 14px; height: 14px; }
+
+/* Bulk Actions */
+.bulk-actions-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #171717;
+  color: #fff;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.bulk-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: #A3A3A3;
+  cursor: pointer;
+  font-size: 13px;
+  text-decoration: underline;
+}
+
+.btn-link:hover { color: #fff; }
+
+.bulk-buttons { display: flex; gap: 8px; }
+
+.btn-bulk {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  border: none;
+}
+
+.btn-approve-bulk {
+  background: #22C55E;
+  color: #fff;
+}
+
+.btn-approve-bulk:hover { background: #16A34A; }
+.btn-bulk svg { width: 16px; height: 16px; }
+
+/* Results Info */
+.results-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: #737373;
+}
+
+.select-all-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.select-all-label input { cursor: pointer; }
+
+/* Empty State */
 .empty-state {
   text-align: center;
   padding: 48px;
@@ -834,6 +1512,7 @@ async function removeAthleteAvatar() {
   opacity: 0.5;
 }
 
+/* Grid View */
 .athletes-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -846,12 +1525,10 @@ async function removeAthleteAvatar() {
   border-radius: 12px;
   padding: 16px;
   cursor: pointer;
-  transition: box-shadow 0.2s;
+  transition: all 0.2s;
 }
 
-.athlete-card:hover {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-}
+.athlete-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
 
 .card-header {
   display: flex;
@@ -860,31 +1537,9 @@ async function removeAthleteAvatar() {
   margin-bottom: 12px;
 }
 
-.avatar {
-  width: 44px;
-  height: 44px;
-  background: #171717;
-  color: #fff;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: 16px;
-}
+.card-actions { display: flex; gap: 6px; }
 
-.avatar-large {
-  width: 64px;
-  height: 64px;
-  background: #171717;
-  color: #fff;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: 24px;
-}
+.card-body {}
 
 .athlete-name {
   font-size: 16px;
@@ -914,6 +1569,8 @@ async function removeAthleteAvatar() {
   border-radius: 12px;
 }
 
+.meta-age { background: #EFF6FF; color: #1D4ED8; }
+
 .card-footer {
   display: flex;
   justify-content: space-between;
@@ -932,27 +1589,433 @@ async function removeAthleteAvatar() {
 .status-approved { background: #D1FAE5; color: #065F46; }
 .status-pending { background: #FEF3C7; color: #92400E; }
 
-.view-detail {
+.view-detail { font-size: 12px; color: #737373; }
+
+/* Table List View */
+.athletes-table-wrapper {
+  background: #fff;
+  border: 1px solid #E5E5E5;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.athletes-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.athletes-table thead {
+  background: #FAFAFA;
+  border-bottom: 1px solid #E5E5E5;
+}
+
+.athletes-table th {
+  padding: 14px 16px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: #525252;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.athletes-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.athletes-table th.sortable:hover {
+  color: #171717;
+}
+
+.athletes-table th span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sort-icon {
+  width: 14px;
+  height: 14px;
+  color: #171717;
+}
+
+.th-select { width: 50px; }
+.th-name { min-width: 250px; }
+.th-phone { width: 150px; }
+.th-club { width: 140px; }
+.th-coach { width: 120px; }
+.th-age { width: 80px; text-align: center; }
+.th-status { width: 130px; }
+.th-actions { width: 120px; text-align: center; }
+
+.athletes-table tbody tr {
+  border-bottom: 1px solid #F5F5F5;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.athletes-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.athletes-table tbody tr:hover {
+  background: #FAFAFA;
+}
+
+.athletes-table td {
+  padding: 12px 16px;
+  vertical-align: middle;
+}
+
+.td-select { width: 50px; }
+.td-select input { cursor: pointer; width: 16px; height: 16px; }
+
+.td-name { min-width: 250px; }
+
+.athlete-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.athlete-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.athlete-name-text {
+  font-weight: 600;
+  color: #171717;
+  font-size: 14px;
+}
+
+.athlete-email-text {
   font-size: 12px;
   color: #737373;
 }
+
+.td-phone { width: 150px; }
+
+.phone-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.phone-number {
+  color: #525252;
+  font-size: 13px;
+}
+
+.phone-actions {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.table-row:hover .phone-actions {
+  opacity: 1;
+}
+
+.btn-phone {
+  background: #22C55E;
+  border: none;
+  padding: 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-phone svg {
+  width: 14px;
+  height: 14px;
+  color: #fff;
+}
+
+.btn-phone:hover {
+  background: #16A34A;
+}
+
+.td-club { width: 140px; }
+
+.club-name {
+  font-size: 13px;
+  color: #525252;
+  background: #F5F5F5;
+  padding: 4px 8px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.td-coach {
+  width: 120px;
+  color: #525252;
+  font-size: 13px;
+}
+
+.td-age {
+  width: 80px;
+  text-align: center;
+}
+
+.age-badge {
+  background: #EFF6FF;
+  color: #1D4ED8;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.no-data {
+  color: #A3A3A3;
+}
+
+.td-status { width: 130px; }
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-pill svg {
+  width: 14px;
+  height: 14px;
+}
+
+.status-pill.status-approved {
+  background: #D1FAE5;
+  color: #065F46;
+}
+
+.status-pill.status-pending {
+  background: #FEF3C7;
+  color: #92400E;
+}
+
+.td-actions {
+  width: 120px;
+  text-align: center;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+
+.table-row:hover .action-buttons {
+  opacity: 1;
+}
+
+.btn-action {
+  background: #F5F5F5;
+  border: none;
+  padding: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.btn-action svg {
+  width: 16px;
+  height: 16px;
+  color: #525252;
+}
+
+.btn-action:hover {
+  background: #171717;
+}
+
+.btn-action:hover svg {
+  color: #fff;
+}
+
+.btn-action.btn-view {
+  background: #171717;
+}
+
+.btn-action.btn-view svg {
+  color: #fff;
+}
+
+.btn-action.btn-view:hover {
+  background: #262626;
+}
+
+/* Mobile List View */
+.mobile-list-container {
+  display: none;
+}
+
+.mobile-card {
+  background: #fff;
+  border: 1px solid #E5E5E5;
+  border-radius: 12px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.mobile-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid #F5F5F5;
+}
+
+.mobile-select {
+  flex-shrink: 0;
+}
+
+.mobile-select input {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.mobile-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.mobile-name {
+  display: block;
+  font-weight: 600;
+  color: #171717;
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mobile-email {
+  display: block;
+  font-size: 13px;
+  color: #737373;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dot-approved { background: #22C55E; }
+.dot-pending { background: #F59E0B; }
+
+.mobile-card-body {
+  padding: 12px 16px;
+}
+
+.mobile-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid #F5F5F5;
+}
+
+.mobile-row:last-child {
+  border-bottom: none;
+}
+
+.mobile-label {
+  font-size: 13px;
+  color: #737373;
+}
+
+.mobile-value {
+  font-size: 13px;
+  color: #171717;
+  font-weight: 500;
+}
+
+.mobile-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #FAFAFA;
+}
+
+.mobile-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-mobile {
+  background: #fff;
+  border: 1px solid #E5E5E5;
+  padding: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-mobile svg {
+  width: 18px;
+  height: 18px;
+  color: #525252;
+}
+
+.btn-mobile:hover {
+  background: #171717;
+  border-color: #171717;
+}
+
+.btn-mobile:hover svg {
+  color: #fff;
+}
+
+/* Legacy styles for compatibility */
+.btn-contact {
+  background: #F5F5F5;
+  border: none;
+  padding: 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-contact svg { width: 14px; height: 14px; color: #525252; }
+.btn-contact:hover { background: #E5E5E5; }
 
 /* Detail Modal */
 .detail-content { min-height: 400px; }
 
 .detail-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 16px;
   padding-bottom: 16px;
   border-bottom: 1px solid #E5E5E5;
   margin-bottom: 16px;
 }
 
-/* Avatar container with remove button (Requirement 6.2) */
-.avatar-container {
-  position: relative;
-}
+.avatar-container { position: relative; }
 
 .btn-remove-avatar {
   position: absolute;
@@ -972,31 +2035,51 @@ async function removeAthleteAvatar() {
   transition: background 0.2s;
 }
 
-.btn-remove-avatar:hover {
-  background: #DC2626;
+.btn-remove-avatar:hover { background: #DC2626; }
+.btn-remove-avatar svg { width: 12px; height: 12px; }
+
+.detail-info { flex: 1; }
+.detail-info h3 { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
+.detail-info p { color: #737373; margin: 0 0 8px; }
+
+.status-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
 }
 
-.btn-remove-avatar svg {
-  width: 12px;
-  height: 12px;
+.quick-contact {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
-.detail-info h3 {
-  font-size: 20px;
-  font-weight: 600;
-  margin: 0 0 4px;
+.btn-contact-lg {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #F5F5F5;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #525252;
+  cursor: pointer;
+  transition: all 0.2s;
 }
 
-.detail-info p {
-  color: #737373;
-  margin: 0 0 8px;
-}
+.btn-contact-lg svg { width: 16px; height: 16px; }
+.btn-contact-lg:hover { background: #E5E5E5; color: #171717; }
 
+/* Tabs */
 .tabs {
   display: flex;
   gap: 4px;
   border-bottom: 1px solid #E5E5E5;
   margin-bottom: 16px;
+  overflow-x: auto;
 }
 
 .tab {
@@ -1011,6 +2094,8 @@ async function removeAthleteAvatar() {
   font-size: 14px;
   cursor: pointer;
   margin-bottom: -1px;
+  white-space: nowrap;
+  transition: all 0.2s;
 }
 
 .tab svg { width: 16px; height: 16px; }
@@ -1019,6 +2104,7 @@ async function removeAthleteAvatar() {
 
 .tab-content { min-height: 200px; }
 
+/* Info Grid */
 .info-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -1032,17 +2118,8 @@ async function removeAthleteAvatar() {
 }
 
 .info-item.full { grid-column: 1 / -1; }
-
-.info-item .label {
-  font-size: 12px;
-  color: #737373;
-}
-
-.info-item .value {
-  font-size: 14px;
-  color: #171717;
-  font-weight: 500;
-}
+.info-item .label { font-size: 12px; color: #737373; }
+.info-item .value { font-size: 14px; color: #171717; font-weight: 500; }
 
 .parent-section {
   margin-top: 24px;
@@ -1098,27 +2175,10 @@ async function removeAthleteAvatar() {
 }
 
 .doc-icon svg { width: 20px; height: 20px; color: #fff; }
-
 .doc-info { flex: 1; }
-
-.doc-type {
-  font-size: 14px;
-  font-weight: 500;
-  color: #171717;
-}
-
-.doc-meta {
-  display: flex;
-  gap: 12px;
-  font-size: 12px;
-  color: #737373;
-}
-
-.doc-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
+.doc-type { font-size: 14px; font-weight: 500; color: #171717; }
+.doc-meta { display: flex; gap: 12px; font-size: 12px; color: #737373; }
+.doc-actions { display: flex; align-items: center; gap: 8px; }
 
 .verified-badge {
   display: flex;
@@ -1148,6 +2208,30 @@ async function removeAthleteAvatar() {
 
 .btn-verify:hover { background: #262626; }
 
+.btn-approve {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #22C55E;
+  color: #fff;
+  border: none;
+}
+
+.btn-approve:hover { background: #16A34A; }
+.btn-approve svg { width: 14px; height: 14px; }
+
+.btn-reject {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #fff;
+  color: #EF4444;
+  border: 1px solid #EF4444;
+}
+
+.btn-reject:hover { background: #FEF2F2; }
+.btn-reject svg { width: 14px; height: 14px; }
+
 /* Form */
 .form {
   display: flex;
@@ -1174,151 +2258,54 @@ async function removeAthleteAvatar() {
   font-size: 14px;
 }
 
-/* Admin Stats Row */
-.stats-row {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-  margin-bottom: 24px;
+.form-control:focus {
+  outline: none;
+  border-color: #171717;
 }
 
-.stat-card {
-  background: #fff;
-  border: 1px solid #E5E5E5;
-  border-radius: 12px;
-  padding: 16px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  cursor: pointer;
-  transition: box-shadow 0.2s;
+/* Responsive */
+@media (max-width: 1024px) {
+  .stats-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  /* ซ่อนคอลัมน์ที่ไม่จำเป็นบน tablet */
+  .th-club, .td-club {
+    display: none;
+  }
 }
-
-.stat-card:hover {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-}
-
-.stat-card.stat-approved { border-left: 3px solid #22C55E; }
-.stat-card.stat-pending { border-left: 3px solid #F59E0B; }
-
-.stat-icon {
-  width: 44px;
-  height: 44px;
-  background: #171717;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.stat-icon svg { width: 22px; height: 22px; color: #fff; }
-.stat-card.stat-approved .stat-icon { background: #22C55E; }
-.stat-card.stat-pending .stat-icon { background: #F59E0B; }
-
-.stat-info {
-  display: flex;
-  flex-direction: column;
-}
-
-.stat-value {
-  font-size: 24px;
-  font-weight: 700;
-  color: #171717;
-}
-
-.stat-label {
-  font-size: 13px;
-  color: #737373;
-}
-
-/* Admin Filters */
-.filters-row {
-  display: flex;
-  gap: 16px;
-  align-items: flex-end;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-}
-
-.filter-group {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.filter-group label {
-  font-size: 12px;
-  color: #737373;
-  font-weight: 500;
-}
-
-.filter-select {
-  padding: 8px 12px;
-  border: 1px solid #E5E5E5;
-  border-radius: 6px;
-  font-size: 14px;
-  min-width: 160px;
-  background: #fff;
-}
-
-.btn-clear {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: transparent;
-  border: 1px solid #E5E5E5;
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 13px;
-  color: #737373;
-  cursor: pointer;
-}
-
-.btn-clear:hover { background: #F5F5F5; color: #171717; }
-.btn-clear svg { width: 14px; height: 14px; }
-
-/* Status Actions */
-.status-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 4px;
-}
-
-.btn-approve {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  background: #22C55E;
-  color: #fff;
-  border: none;
-}
-
-.btn-approve:hover { background: #16A34A; }
-.btn-approve svg { width: 14px; height: 14px; }
-
-.btn-reject {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  background: #fff;
-  color: #EF4444;
-  border: 1px solid #EF4444;
-}
-
-.btn-reject:hover { background: #FEF2F2; }
-.btn-reject svg { width: 14px; height: 14px; }
 
 @media (max-width: 768px) {
+  .athletes-page {
+    padding: 16px;
+  }
+  
   .page-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 16px;
   }
+  
+  .header-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
 
   .stats-row {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .search-box {
+    min-width: 100%;
+  }
+  
+  .toolbar-actions {
+    justify-content: space-between;
   }
 
   .filters-row {
@@ -1333,6 +2320,15 @@ async function removeAthleteAvatar() {
   .athletes-grid {
     grid-template-columns: 1fr;
   }
+  
+  /* ซ่อน table บน mobile แสดง mobile-list แทน */
+  .athletes-table-wrapper {
+    display: none;
+  }
+  
+  .mobile-list-container {
+    display: block;
+  }
 
   .info-grid {
     grid-template-columns: repeat(2, 1fr);
@@ -1340,11 +2336,59 @@ async function removeAthleteAvatar() {
 
   .tabs {
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .tab {
+    padding: 10px 12px;
+    font-size: 13px;
   }
 
   .status-actions {
     flex-direction: column;
     align-items: flex-start;
+  }
+  
+  .quick-contact {
+    flex-direction: column;
+    width: 100%;
+  }
+  
+  .btn-contact-lg {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .detail-header {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  
+  .detail-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-row {
+    grid-template-columns: 1fr;
+  }
+  
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .bulk-actions-bar {
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .bulk-info, .bulk-buttons {
+    width: 100%;
+    justify-content: center;
   }
 }
 </style>
