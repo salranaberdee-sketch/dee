@@ -8,18 +8,17 @@
           <p class="subtitle">ติดตามและวัดผลการพัฒนาของนักกีฬา</p>
         </div>
         <div class="header-actions">
-          <router-link to="/scoring-config" class="btn-settings primary">
+          <router-link to="/score-calculator" class="btn-settings primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+            </svg>
+            คำนวณคะแนน
+          </router-link>
+          <router-link to="/scoring-config" class="btn-settings">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
             </svg>
-            เกณฑ์ยืดหยุ่น
-          </router-link>
-          <router-link to="/evaluation/settings" class="btn-settings">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="3"/>
-              <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
-            </svg>
-            ตั้งค่าเดิม
+            ตั้งค่าเกณฑ์
           </router-link>
         </div>
       </div>
@@ -27,24 +26,26 @@
 
     <!-- Filters -->
     <div class="filters-section">
-      <div class="filter-group">
-        <label>เดือน</label>
-        <input 
-          type="month" 
-          v-model="selectedMonth"
-          @change="loadData"
-          class="month-input"
-        />
-      </div>
-      <div class="filter-group">
-        <label>ระดับผลงาน</label>
-        <select v-model="filterTier" class="tier-select">
-          <option value="">ทั้งหมด</option>
-          <option value="excellent">ดีเยี่ยม</option>
-          <option value="good">ดี</option>
-          <option value="average">ปานกลาง</option>
-          <option value="needs_improvement">ต้องปรับปรุง</option>
-        </select>
+      <div class="filter-row">
+        <div class="filter-group">
+          <label>เดือน</label>
+          <input 
+            type="month" 
+            v-model="selectedMonth"
+            @change="loadData"
+            class="month-input"
+          />
+        </div>
+        <div class="filter-group">
+          <label>ระดับผลงาน</label>
+          <select v-model="filterTier" class="tier-select">
+            <option value="">ทั้งหมด</option>
+            <option value="excellent">ดีเยี่ยม</option>
+            <option value="good">ดี</option>
+            <option value="average">ปานกลาง</option>
+            <option value="needs_improvement">ต้องปรับปรุง</option>
+          </select>
+        </div>
       </div>
       <button @click="loadData" class="btn-refresh" :disabled="loading">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -56,7 +57,7 @@
 
     <!-- Summary Cards -->
     <div class="summary-cards">
-      <div class="summary-card">
+      <div class="summary-card" @click="filterTier = filterTier === 'excellent' ? '' : 'excellent'" :class="{ active: filterTier === 'excellent' }">
         <div class="card-icon excellent">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
@@ -68,7 +69,7 @@
         </div>
       </div>
 
-      <div class="summary-card">
+      <div class="summary-card" @click="filterTier = filterTier === 'good' ? '' : 'good'" :class="{ active: filterTier === 'good' }">
         <div class="card-icon good">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
@@ -81,7 +82,7 @@
         </div>
       </div>
 
-      <div class="summary-card">
+      <div class="summary-card" @click="filterTier = filterTier === 'average' ? '' : 'average'" :class="{ active: filterTier === 'average' }">
         <div class="card-icon average">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"/>
@@ -94,7 +95,7 @@
         </div>
       </div>
 
-      <div class="summary-card">
+      <div class="summary-card" @click="filterTier = filterTier === 'needs_improvement' ? '' : 'needs_improvement'" :class="{ active: filterTier === 'needs_improvement' }">
         <div class="card-icon warning">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
@@ -357,9 +358,19 @@ onMounted(() => {
 
 .filters-section {
   display: flex;
-  gap: 1rem;
+  justify-content: space-between;
   align-items: flex-end;
+  gap: 1rem;
   margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: #fff;
+  border: 1px solid #E5E5E5;
+  border-radius: 12px;
+}
+
+.filter-row {
+  display: flex;
+  gap: 1rem;
   flex-wrap: wrap;
 }
 
@@ -417,8 +428,20 @@ onMounted(() => {
   gap: 1rem;
   padding: 1.25rem;
   background: #fff;
-  border: 1px solid #E5E5E5;
+  border: 2px solid #E5E5E5;
   border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.summary-card:hover {
+  border-color: #D4D4D4;
+  transform: translateY(-2px);
+}
+
+.summary-card.active {
+  border-color: #171717;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
 
 .card-icon {

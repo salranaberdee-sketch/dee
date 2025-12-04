@@ -118,6 +118,60 @@ defineEmits(['close'])
 .modal-enter-from, .modal-leave-to { opacity: 0; }
 .modal-enter-from .modal, .modal-leave-to .modal { transform: translateY(100%); }
 
+/* Mobile - Bottom sheet style */
+@media (max-width: 639px) {
+  .modal-overlay {
+    padding: 0;
+  }
+  
+  .modal {
+    max-height: 95vh;
+    border-radius: 20px 20px 0 0;
+  }
+  
+  .modal-large {
+    max-width: 100%;
+  }
+  
+  .modal-handle {
+    width: 48px;
+    height: 5px;
+    margin: 10px auto;
+  }
+  
+  .modal-header {
+    padding: 0.875rem 1rem;
+  }
+  
+  .modal-header h3 {
+    font-size: 1.125rem;
+  }
+  
+  /* Close button - touch-friendly */
+  .close-btn {
+    width: 44px;
+    height: 44px;
+  }
+  
+  .close-btn svg {
+    width: 22px;
+    height: 22px;
+  }
+  
+  .modal-body {
+    padding: 1rem;
+    /* ให้ scroll ได้ดีบน iOS */
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .modal-footer {
+    padding: 1rem;
+    /* Safe area สำหรับ iPhone X+ */
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* Desktop/Tablet - Centered modal */
 @media (min-width: 640px) {
   .modal-overlay {
     align-items: center;

@@ -147,7 +147,6 @@
 
 - [x] 12. Final Checkpoint
 
-
   - [x] 12.1 Final verification
 
 

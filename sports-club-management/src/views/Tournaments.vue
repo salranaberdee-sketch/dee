@@ -187,13 +187,34 @@
       </template>
     </Modal>
 
-    <!-- Detail Modal -->
+    <!-- Detail Modal - Enhanced with full-screen on mobile -->
     <Modal v-if="showDetailModal" @close="closeDetailModal" size="large">
       <template #header>
-        <h2>{{ selectedTournament?.name }}</h2>
+        <div class="detail-header">
+          <h2>{{ selectedTournament?.name }}</h2>
+          <span v-if="selectedTournament" :class="['status-badge-sm', `status-${selectedTournament.status}`]">
+            {{ statusLabels[selectedTournament.status] }}
+          </span>
+        </div>
       </template>
       <template #body>
+        <div v-if="detailLoading" class="detail-loading">
+          <div class="loading-spinner-lg"></div>
+          <p>กำลังโหลดข้อมูล...</p>
+        </div>
+        <div v-else-if="detailError" class="detail-error">
+          <div class="error-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+          </div>
+          <p>{{ detailError }}</p>
+          <button class="btn-secondary" @click="retryLoadDetail">ลองใหม่</button>
+        </div>
         <TournamentDetail 
+          v-else
           :tournament="selectedTournament" 
           @refresh="refreshTournament"
         />
@@ -221,6 +242,10 @@ const modalMode = ref('add')
 const selectedTournament = ref(null)
 const filterStatus = ref('')
 const searchQuery = ref('')
+
+// สถานะสำหรับ Detail Modal
+const detailLoading = ref(false)
+const detailError = ref(null)
 
 const isAdmin = computed(() => authStore.isAdmin)
 const isCoach = computed(() => authStore.isCoach)
@@ -346,20 +371,60 @@ async function confirmDelete(tournament) {
   }
 }
 
-function viewTournament(tournament) {
+/**
+ * เปิด Modal แสดงรายละเอียดทัวนาเมนต์
+ * Requirements: 5.1, 5.2, 5.3, 5.4, 5.5
+ */
+async function viewTournament(tournament) {
   selectedTournament.value = tournament
   showDetailModal.value = true
+  detailLoading.value = true
+  detailError.value = null
+  
+  try {
+    // โหลดข้อมูลทัวนาเมนต์ล่าสุด
+    await dataStore.fetchTournaments()
+    const updated = dataStore.getTournamentById(tournament.id)
+    if (updated) {
+      selectedTournament.value = updated
+    }
+  } catch (err) {
+    detailError.value = 'ไม่สามารถโหลดข้อมูลได้ กรุณาลองใหม่'
+    console.error('Error loading tournament detail:', err)
+  } finally {
+    detailLoading.value = false
+  }
 }
 
 function closeDetailModal() {
   showDetailModal.value = false
   selectedTournament.value = null
+  detailError.value = null
 }
 
+/**
+ * รีเฟรชข้อมูลทัวนาเมนต์
+ */
 async function refreshTournament() {
-  await dataStore.fetchTournaments()
+  try {
+    await dataStore.fetchTournaments()
+    if (selectedTournament.value) {
+      const updated = dataStore.getTournamentById(selectedTournament.value.id)
+      if (updated) {
+        selectedTournament.value = updated
+      }
+    }
+  } catch (err) {
+    console.error('Error refreshing tournament:', err)
+  }
+}
+
+/**
+ * ลองโหลดข้อมูลใหม่เมื่อเกิดข้อผิดพลาด
+ */
+async function retryLoadDetail() {
   if (selectedTournament.value) {
-    selectedTournament.value = dataStore.getTournamentById(selectedTournament.value.id)
+    await viewTournament(selectedTournament.value)
   }
 }
 
@@ -660,19 +725,345 @@ onMounted(async () => {
   gap: 16px;
 }
 
+/* Mobile Responsive */
 @media (max-width: 640px) {
+  .tournaments-page {
+    padding: 16px;
+  }
+  
+  /* Header */
   .page-header {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
     gap: 16px;
+    margin-bottom: 20px;
+  }
+  
+  .page-header h1 {
+    font-size: 22px;
+  }
+  
+  .subtitle {
+    font-size: 14px;
+  }
+  
+  .header-actions {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  /* Buttons - Touch-friendly */
+  .btn-primary {
+    width: 100%;
+    justify-content: center;
+    min-height: 48px;
+    font-size: 15px;
+    border-radius: 10px;
+  }
+  
+  .btn-primary svg {
+    width: 20px;
+    height: 20px;
+  }
+  
+  .btn-secondary {
+    width: 100%;
+    justify-content: center;
+    min-height: 48px;
+    font-size: 14px;
+    border-radius: 10px;
+    text-decoration: none;
+  }
+  
+  .btn-secondary svg {
+    width: 18px;
+    height: 18px;
+  }
+  
+  /* Filters */
+  .filters {
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  
+  .filter-group {
+    width: 100%;
+  }
+  
+  .filter-group label {
+    font-size: 13px;
+  }
+  
+  .filter-group select,
+  .filter-group input {
+    width: 100%;
+    min-width: unset;
+    padding: 12px 14px;
+    font-size: 16px; /* ป้องกัน zoom บน iOS */
+    min-height: 48px;
+    border-radius: 10px;
+  }
+  
+  /* Tournament Grid */
+  .tournament-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  
+  /* Tournament Card */
+  .tournament-card {
+    padding: 18px;
+    border-radius: 14px;
+  }
+  
+  .card-header {
+    margin-bottom: 14px;
+  }
+  
+  .card-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+  }
+  
+  .card-icon svg {
+    width: 26px;
+    height: 26px;
+  }
+  
+  .status-badge {
+    font-size: 12px;
+    padding: 5px 12px;
+  }
+  
+  .tournament-card h3 {
+    font-size: 17px;
+  }
+  
+  .sport-type {
+    font-size: 14px;
+    margin-bottom: 14px;
+  }
+  
+  .card-info {
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  
+  .info-row {
+    font-size: 14px;
+    gap: 10px;
+  }
+  
+  .info-row svg {
+    width: 18px;
+    height: 18px;
+  }
+  
+  /* Card Actions */
+  .card-actions {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding-top: 14px;
+  }
+  
+  .card-actions .btn-secondary {
+    flex: 1;
+    min-width: 120px;
+    min-height: 44px;
+    font-size: 14px;
+  }
+  
+  .btn-icon {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 10px;
+    border-radius: 10px;
+  }
+  
+  .btn-icon svg {
+    width: 18px;
+    height: 18px;
+  }
+  
+  /* Empty State */
+  .empty-state {
+    padding: 40px 20px;
+  }
+  
+  .empty-state svg {
+    width: 56px;
+    height: 56px;
+  }
+  
+  .empty-state p {
+    font-size: 15px;
+  }
+  
+  /* Form */
+  .form {
+    gap: 18px;
   }
   
   .form-row {
     grid-template-columns: 1fr;
+    gap: 18px;
+  }
+  
+  .form-group label {
+    font-size: 14px;
+  }
+  
+  .form-group input,
+  .form-group select,
+  .form-group textarea {
+    padding: 12px 14px;
+    font-size: 16px; /* ป้องกัน zoom บน iOS */
+    min-height: 48px;
+    border-radius: 10px;
+  }
+  
+  .form-group textarea {
+    min-height: 80px;
+  }
+  
+  /* Loading */
+  .loading {
+    padding: 40px;
+    font-size: 15px;
+  }
+}
+
+/* Tablet */
+@media (min-width: 641px) and (max-width: 1024px) {
+  .tournaments-page {
+    padding: 20px;
   }
   
   .tournament-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .form-row {
+    gap: 14px;
+  }
+}
+
+/* Detail Modal Header */
+.detail-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.detail-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #171717;
+}
+
+.status-badge-sm {
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* Detail Loading State */
+.detail-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  min-height: 300px;
+}
+
+.detail-loading p {
+  margin: 16px 0 0;
+  color: #737373;
+  font-size: 14px;
+}
+
+.loading-spinner-lg {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #E5E5E5;
+  border-top-color: #171717;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Detail Error State */
+.detail-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  min-height: 300px;
+  text-align: center;
+}
+
+.error-icon {
+  width: 64px;
+  height: 64px;
+  background: #FEE2E2;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.error-icon svg {
+  width: 32px;
+  height: 32px;
+  color: #991B1B;
+}
+
+.detail-error p {
+  margin: 0 0 16px;
+  color: #525252;
+  font-size: 14px;
+}
+
+/* Mobile Responsive for Detail Modal */
+@media (max-width: 640px) {
+  .detail-header h2 {
+    font-size: 16px;
+  }
+  
+  .status-badge-sm {
+    font-size: 10px;
+    padding: 2px 6px;
+  }
+  
+  .detail-loading,
+  .detail-error {
+    padding: 40px 20px;
+    min-height: 250px;
+  }
+  
+  .loading-spinner-lg {
+    width: 36px;
+    height: 36px;
+  }
+  
+  .error-icon {
+    width: 56px;
+    height: 56px;
+  }
+  
+  .error-icon svg {
+    width: 28px;
+    height: 28px;
   }
 }
 </style>

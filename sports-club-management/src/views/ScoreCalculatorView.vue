@@ -30,15 +30,39 @@
           <line x1="12" y1="16" x2="12.01" y2="16"/>
         </svg>
       </div>
-      <h3>ยังไม่มีการตั้งค่าเกณฑ์</h3>
-      <p>กรุณาตั้งค่าเกณฑ์การให้คะแนนก่อนใช้งาน</p>
-      <router-link to="/scoring-config" class="btn-primary">
-        ไปตั้งค่าเกณฑ์
-      </router-link>
+      <h3>ยังไม่มีการตั้งค่าเกณฑ์ที่ใช้งาน</h3>
+      <p>กรุณาตั้งค่าและเปิดใช้งานเกณฑ์การให้คะแนนก่อน</p>
+      <div class="warning-actions">
+        <router-link to="/scoring-config" class="btn-primary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+          ไปตั้งค่าเกณฑ์
+        </router-link>
+        <router-link to="/evaluation" class="btn-secondary">
+          กลับหน้าประเมิน
+        </router-link>
+      </div>
     </div>
 
     <!-- Main Content -->
     <div v-else class="content-wrapper">
+      <!-- Quick Info Bar -->
+      <div class="quick-info-bar">
+        <div class="info-item">
+          <span class="info-label">เกณฑ์ที่ใช้</span>
+          <span class="info-value">{{ scoringConfigStore.clubConfig?.name || '-' }}</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">หมวดหมู่</span>
+          <span class="info-value">{{ categories.length }} หมวด</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">ตัวชี้วัด</span>
+          <span class="info-value">{{ metrics.length }} รายการ</span>
+        </div>
+      </div>
+
       <!-- Athlete Selection -->
       <section class="settings-section">
         <div class="section-header">
@@ -50,7 +74,7 @@
           </div>
           <div>
             <h2>เลือกนักกีฬา</h2>
-            <p>เลือกนักกีฬาที่ต้องการดูคะแนน</p>
+            <p>เลือกนักกีฬาที่ต้องการคำนวณคะแนน</p>
           </div>
         </div>
 
@@ -65,6 +89,12 @@
               {{ athlete.full_name || athlete.name }}
             </option>
           </select>
+          <span v-if="selectedAthleteName" class="selected-name">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            {{ selectedAthleteName }}
+          </span>
         </div>
       </section>
 
@@ -465,8 +495,36 @@ onMounted(() => {
 
 .warning-card p {
   color: #92400E;
-  margin: 0 0 1rem;
+  margin: 0 0 1.5rem;
   font-size: 0.875rem;
+}
+
+.warning-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.btn-secondary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.875rem 1.5rem;
+  background: #fff;
+  color: #171717;
+  border: 1px solid #E5E5E5;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: all 0.15s;
+}
+
+.btn-secondary:hover {
+  background: #F5F5F5;
 }
 
 /* Content Wrapper */
@@ -525,9 +583,57 @@ onMounted(() => {
   margin: 0.25rem 0 0;
 }
 
+/* Quick Info Bar */
+.quick-info-bar {
+  display: flex;
+  gap: 1.5rem;
+  padding: 1rem 1.25rem;
+  background: #171717;
+  border-radius: 12px;
+  margin-bottom: 1.5rem;
+}
+
+.quick-info-bar .info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.quick-info-bar .info-label {
+  font-size: 0.75rem;
+  color: #A3A3A3;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.quick-info-bar .info-value {
+  font-weight: 600;
+  color: #fff;
+  font-size: 0.875rem;
+}
+
 /* Athlete Selector */
 .athlete-selector {
   max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.selected-name {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #065F46;
+  padding: 0.5rem 0.75rem;
+  background: #D1FAE5;
+  border-radius: 6px;
+}
+
+.selected-name svg {
+  width: 16px;
+  height: 16px;
 }
 
 .select-input {
@@ -701,6 +807,11 @@ onMounted(() => {
     padding: 1rem;
   }
 
+  .quick-info-bar {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
   .metric-input-row {
     flex-direction: column;
     align-items: stretch;
@@ -709,6 +820,10 @@ onMounted(() => {
 
   .input-with-unit {
     justify-content: flex-end;
+  }
+
+  .warning-actions {
+    flex-direction: column;
   }
 }
 </style>

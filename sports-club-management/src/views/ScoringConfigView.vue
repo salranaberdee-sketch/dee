@@ -315,10 +315,24 @@
       </section>
 
       <!-- Current Config Info -->
-      <section v-if="currentConfig" class="settings-section info-section">
+      <section v-if="currentConfig" class="settings-section info-section" :class="{ 'config-active': currentConfig.is_active }">
+        <div class="config-status-header">
+          <div class="status-indicator" :class="{ active: currentConfig.is_active }">
+            <svg v-if="currentConfig.is_active" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <span>{{ currentConfig.is_active ? 'เกณฑ์นี้กำลังใช้งานอยู่' : 'เกณฑ์นี้ยังไม่ได้เปิดใช้งาน' }}</span>
+          </div>
+        </div>
+
         <div class="config-info">
           <div class="info-item">
-            <span class="info-label">การตั้งค่าปัจจุบัน</span>
+            <span class="info-label">ชื่อเกณฑ์</span>
             <span class="info-value">{{ currentConfig.name }}</span>
           </div>
           <div class="info-item">
@@ -326,10 +340,8 @@
             <span class="info-value">{{ currentConfig.version }}</span>
           </div>
           <div class="info-item">
-            <span class="info-label">สถานะ</span>
-            <span class="status-badge" :class="{ active: currentConfig.is_active }">
-              {{ currentConfig.is_active ? 'ใช้งานอยู่' : 'ไม่ได้ใช้งาน' }}
-            </span>
+            <span class="info-label">หมวดหมู่</span>
+            <span class="info-value">{{ editableCategories.length }} หมวด</span>
           </div>
         </div>
 
@@ -342,11 +354,17 @@
             </svg>
             ดูประวัติ
           </router-link>
+          <router-link to="/score-calculator" class="btn-secondary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+            </svg>
+            ทดสอบคำนวณ
+          </router-link>
           <button @click="activateConfig" class="btn-primary" :disabled="saving || currentConfig.is_active">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="20 6 9 17 4 12"/>
             </svg>
-            {{ currentConfig.is_active ? 'ใช้งานอยู่' : 'เปิดใช้งาน' }}
+            {{ currentConfig.is_active ? 'ใช้งานอยู่แล้ว' : 'เปิดใช้งานเกณฑ์นี้' }}
           </button>
         </div>
       </section>
@@ -1020,6 +1038,40 @@ onMounted(() => {
 /* Config Info */
 .info-section {
   background: #FAFAFA;
+  border: 2px solid #E5E5E5;
+}
+
+.info-section.config-active {
+  background: #D1FAE5;
+  border-color: #22C55E;
+}
+
+.config-status-header {
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #E5E5E5;
+}
+
+.info-section.config-active .config-status-header {
+  border-bottom-color: #A7F3D0;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #92400E;
+}
+
+.status-indicator.active {
+  color: #065F46;
+}
+
+.status-indicator svg {
+  width: 20px;
+  height: 20px;
 }
 
 .config-info {

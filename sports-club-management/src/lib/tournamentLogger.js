@@ -22,8 +22,11 @@ export const ACTIONS = {
   
   // Participants
   PARTICIPANT_ADD: 'participant_add',
+  PARTICIPANT_BULK_ADD: 'participant_bulk_add',
   PARTICIPANT_REMOVE: 'participant_remove',
+  PARTICIPANT_BULK_REMOVE: 'participant_bulk_remove',
   PARTICIPANT_STATUS_CHANGE: 'participant_status_change',
+  PARTICIPANT_BULK_CATEGORY_UPDATE: 'participant_bulk_category_update',
   
   // Matches
   MATCH_CREATE: 'match_create',

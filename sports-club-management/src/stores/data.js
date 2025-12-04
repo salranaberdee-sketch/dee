@@ -1735,11 +1735,209 @@ export const useDataStore = defineStore('data', () => {
     return { success: false, message: err?.message }
   }
 
+  // ============ BULK TOURNAMENT OPERATIONS ============
+  // Requirements: 1.3, 4.3, 4.4, 6.1
+
+  /**
+   * เพิ่มนักกีฬาหลายคนพร้อมกัน
+   * Property 2: Bulk add completeness - นักกีฬาที่เพิ่มสำเร็จต้องมี record ในทัวนาเมนต์
+   * Property 3: Partial failure handling - ถ้าบางคนล้มเหลว คนอื่นต้องยังเพิ่มได้
+   * Validates: Requirements 1.3, 1.5
+   * 
+   * @param {Object} payload - { tournamentId, athleteIds, category, weightClass, registeredBy }
+   * @returns {Promise<{success: boolean, addedCount: number, failedCount: number, failures: Array}>}
+   */
+  async function bulkAddParticipants(payload) {
+    const { tournamentId, athleteIds, category, weightClass, registeredBy } = payload
+    
+    if (!tournamentId || !athleteIds || !Array.isArray(athleteIds) || athleteIds.length === 0) {
+      return { 
+        success: false, 
+        addedCount: 0, 
+        failedCount: 0, 
+        failures: [],
+        message: 'กรุณาเลือกนักกีฬาอย่างน้อย 1 คน'
+      }
+    }
+
+    const results = {
+      success: true,
+      addedCount: 0,
+      failedCount: 0,
+      failures: []
+    }
+
+    // ดึงข้อมูลนักกีฬาทั้งหมดที่เลือก
+    const { data: athletesData } = await supabase
+      .from('athletes')
+      .select('id, club_id, coach_id')
+      .in('id', athleteIds)
+
+    const athleteMap = new Map()
+    if (athletesData) {
+      athletesData.forEach(a => athleteMap.set(a.id, a))
+    }
+
+    // เพิ่มทีละคน เพื่อจัดการ error แยกกัน
+    for (const athleteId of athleteIds) {
+      const athlete = athleteMap.get(athleteId)
+      
+      const participantData = {
+        tournament_id: tournamentId,
+        athlete_id: athleteId,
+        club_id: athlete?.club_id || null,
+        coach_id: athlete?.coach_id || null,
+        category: category || null,
+        weight_class: weightClass || null,
+        registered_by: registeredBy,
+        registration_status: 'approved'
+      }
+
+      const { data, error: err } = await supabase
+        .from('tournament_participants')
+        .insert(participantData)
+        .select('*, athletes(name, email, phone), clubs(name), coaches(name)')
+        .single()
+
+      if (!err && data) {
+        results.addedCount++
+        tournamentParticipants.value.unshift(data)
+      } else {
+        results.failedCount++
+        results.failures.push({
+          athleteId,
+          error: err?.code === '23505' ? 'นักกีฬาคนนี้ลงทะเบียนแล้ว' : (err?.message || 'เกิดข้อผิดพลาด')
+        })
+      }
+    }
+
+    // ถ้าทุกคนล้มเหลว ถือว่าไม่สำเร็จ
+    if (results.addedCount === 0 && results.failedCount > 0) {
+      results.success = false
+    }
+
+    return results
+  }
+
+  /**
+   * ลบผู้เข้าแข่งขันหลายคนพร้อมกัน
+   * Property 11: Bulk remove completeness - ผู้เข้าแข่งขันที่เลือกต้องถูกลบทั้งหมด
+   * Validates: Requirements 4.3
+   * 
+   * @param {Array<string>} participantIds - รายการ ID ของผู้เข้าแข่งขันที่จะลบ
+   * @returns {Promise<{success: boolean, removedCount: number}>}
+   */
+  async function bulkRemoveParticipants(participantIds) {
+    if (!participantIds || !Array.isArray(participantIds) || participantIds.length === 0) {
+      return { success: false, removedCount: 0, message: 'กรุณาเลือกรายการที่ต้องการลบ' }
+    }
+
+    const { error: err } = await supabase
+      .from('tournament_participants')
+      .delete()
+      .in('id', participantIds)
+
+    if (!err) {
+      // อัพเดท local state
+      const removedSet = new Set(participantIds)
+      tournamentParticipants.value = tournamentParticipants.value.filter(p => !removedSet.has(p.id))
+      return { success: true, removedCount: participantIds.length }
+    }
+
+    return { success: false, removedCount: 0, message: err?.message }
+  }
+
+  /**
+   * เปลี่ยนรุ่น/ประเภทของผู้เข้าแข่งขันหลายคนพร้อมกัน
+   * Property 12: Bulk category update consistency - ผู้เข้าแข่งขันที่เลือกต้องมี category ใหม่
+   * Validates: Requirements 4.4
+   * 
+   * @param {Array<string>} participantIds - รายการ ID ของผู้เข้าแข่งขัน
+   * @param {string} category - รุ่น/ประเภทใหม่
+   * @returns {Promise<{success: boolean, updatedCount: number}>}
+   */
+  async function bulkUpdateCategory(participantIds, category) {
+    if (!participantIds || !Array.isArray(participantIds) || participantIds.length === 0) {
+      return { success: false, updatedCount: 0, message: 'กรุณาเลือกรายการที่ต้องการแก้ไข' }
+    }
+
+    const { data, error: err } = await supabase
+      .from('tournament_participants')
+      .update({ category: category || null })
+      .in('id', participantIds)
+      .select()
+
+    if (!err) {
+      // อัพเดท local state
+      const updatedMap = new Map()
+      if (data) {
+        data.forEach(p => updatedMap.set(p.id, p))
+      }
+
+      tournamentParticipants.value = tournamentParticipants.value.map(p => {
+        if (updatedMap.has(p.id)) {
+          return { ...p, category: category || null }
+        }
+        return p
+      })
+
+      return { success: true, updatedCount: participantIds.length }
+    }
+
+    return { success: false, updatedCount: 0, message: err?.message }
+  }
+
+  /**
+   * ดึงสถิติการลงทะเบียนของทัวนาเมนต์
+   * Property 15: Statistics count accuracy
+   * Property 16: Remaining slots calculation
+   * Validates: Requirements 6.1
+   * 
+   * @param {string} tournamentId - ID ของทัวนาเมนต์
+   * @returns {Object} - สถิติการลงทะเบียน
+   */
+  function getRegistrationStats(tournamentId) {
+    const tournament = tournaments.value.find(t => t.id === tournamentId)
+    const participants = tournamentParticipants.value.filter(p => p.tournament_id === tournamentId)
+    
+    const stats = {
+      totalRegistered: participants.length,
+      maxParticipants: tournament?.max_participants || null,
+      remainingSlots: null,
+      byStatus: {
+        pending: 0,
+        approved: 0,
+        rejected: 0,
+        withdrawn: 0
+      },
+      byCategory: new Map()
+    }
+
+    // นับตาม status และ category
+    for (const participant of participants) {
+      const status = participant.registration_status || 'pending'
+      if (stats.byStatus.hasOwnProperty(status)) {
+        stats.byStatus[status]++
+      }
+
+      const category = participant.category || 'uncategorized'
+      stats.byCategory.set(category, (stats.byCategory.get(category) || 0) + 1)
+    }
+
+    // คำนวณ remaining slots
+    if (stats.maxParticipants !== null && stats.maxParticipants > 0) {
+      stats.remainingSlots = Math.max(0, stats.maxParticipants - stats.totalRegistered)
+    }
+
+    return stats
+  }
+
   // Tournament Matches
+  // ดึงข้อมูลการแข่งขันพร้อมข้อมูลนักกีฬาและชมรม
   async function fetchTournamentMatches(tournamentId) {
     const { data, error: err } = await supabase
       .from('tournament_matches')
-      .select('*, tournament_participants(athlete_id, athletes(name))')
+      .select('*, tournament_participants(athlete_id, club_id, athletes(name), clubs(name))')
       .eq('tournament_id', tournamentId)
       .order('match_date', { ascending: true })
     
@@ -1754,7 +1952,7 @@ export const useDataStore = defineStore('data', () => {
     const { data, error: err } = await supabase
       .from('tournament_matches')
       .insert(match)
-      .select('*, tournament_participants(athlete_id, athletes(name))')
+      .select('*, tournament_participants(athlete_id, club_id, athletes(name), clubs(name))')
       .single()
     
     if (!err && data) {
@@ -1769,7 +1967,7 @@ export const useDataStore = defineStore('data', () => {
       .from('tournament_matches')
       .update({ ...updates, updated_at: new Date().toISOString() })
       .eq('id', id)
-      .select('*, tournament_participants(athlete_id, athletes(name))')
+      .select('*, tournament_participants(athlete_id, club_id, athletes(name), clubs(name))')
       .single()
     
     if (!err && data) {
@@ -2579,6 +2777,9 @@ export const useDataStore = defineStore('data', () => {
     fetchTournamentMatches, addTournamentMatch, updateTournamentMatch, deleteTournamentMatch,
     fetchTournamentAwards, addTournamentAward, deleteTournamentAward,
     getAthleteHistory,
+    
+    // Bulk Tournament Operations (Requirements: 1.3, 4.3, 4.4, 6.1)
+    bulkAddParticipants, bulkRemoveParticipants, bulkUpdateCategory, getRegistrationStats,
     
     // Athlete Documents
     fetchAthleteDocuments, addAthleteDocument, deleteAthleteDocument, verifyAthleteDocument,
