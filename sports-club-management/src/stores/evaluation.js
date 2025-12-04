@@ -3,7 +3,8 @@ import { ref, computed } from 'vue'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from './auth'
 import { useScoringCriteriaStore } from './scoringCriteria'
-import { calculateScore, DEFAULT_CRITERIA } from '../lib/scoreCalculator'
+import { useScoringConfigStore } from './scoringConfig'
+import { calculateScore, calculateOverallScore, createTierThresholdsFromConfig, DEFAULT_CRITERIA } from '../lib/scoreCalculator'
 
 export const useEvaluationStore = defineStore('evaluation', () => {
   // State
@@ -200,6 +201,9 @@ export const useEvaluationStore = defineStore('evaluation', () => {
    * Calculate athlete statistics using configurable scoring criteria
    * Requirements: 4.1, 4.2, 4.3, 4.4, 4.9
    * 
+   * ระบบจะพยายามใช้ Flexible Scoring System (club_scoring_configs) ก่อน
+   * ถ้าไม่มีจะ fallback ไปใช้ระบบเดิม (scoring_criteria)
+   * 
    * @param {string} clubId - The club ID to calculate stats for
    * @param {string} month - The month in YYYY-MM format
    */
@@ -213,13 +217,25 @@ export const useEvaluationStore = defineStore('evaluation', () => {
       monthEnd.setDate(0)
       const endDate = monthEnd.toISOString().slice(0, 10)
 
-      // Fetch scoring criteria and conditions for the club (Requirements 4.1, 4.2, 4.3)
-      const scoringCriteriaStore = useScoringCriteriaStore()
-      await scoringCriteriaStore.fetchCriteria(clubId)
-      await scoringCriteriaStore.fetchConditions(clubId)
+      // พยายามใช้ Flexible Scoring System ก่อน (Requirements 1.1, 6.1)
+      const scoringConfigStore = useScoringConfigStore()
+      await scoringConfigStore.fetchClubConfig(clubId)
       
-      const criteria = scoringCriteriaStore.getEffectiveCriteria()
-      const conditions = scoringCriteriaStore.activeConditions
+      const hasFlexibleConfig = scoringConfigStore.clubConfig?.is_active
+      
+      // ถ้าไม่มี flexible config ให้ใช้ระบบเดิม (backward compatibility)
+      let criteria = null
+      let conditions = []
+      
+      if (!hasFlexibleConfig) {
+        // Fetch scoring criteria and conditions for the club (Requirements 4.1, 4.2, 4.3)
+        const scoringCriteriaStore = useScoringCriteriaStore()
+        await scoringCriteriaStore.fetchCriteria(clubId)
+        await scoringCriteriaStore.fetchConditions(clubId)
+        
+        criteria = scoringCriteriaStore.getEffectiveCriteria()
+        conditions = scoringCriteriaStore.activeConditions
+      }
 
       // ดึงข้อมูลนักกีฬาในชมรม
       let athleteQuery = supabase.from('athletes').select('*')
@@ -278,8 +294,77 @@ export const useEvaluationStore = defineStore('evaluation', () => {
           average_rating: avgRating
         }
 
-        // Calculate score using scoreCalculator with criteria and conditions (Requirement 4.4, 4.9)
-        const scoreBreakdown = calculateScore(athleteStatsData, criteria, conditions)
+        let scoreBreakdown
+
+        if (hasFlexibleConfig) {
+          // ใช้ Flexible Scoring System (Requirements 6.1, 6.2, 6.3, 6.4)
+          const flexibleCategories = scoringConfigStore.activeCategories
+          const flexibleMetrics = scoringConfigStore.metrics
+          
+          // จัดกลุ่ม metrics ตาม category
+          const metricsByCategory = {}
+          for (const metric of flexibleMetrics) {
+            if (!metricsByCategory[metric.category_id]) {
+              metricsByCategory[metric.category_id] = []
+            }
+            metricsByCategory[metric.category_id].push(metric)
+          }
+
+          // สร้าง metric values จากข้อมูลนักกีฬา
+          const metricValues = {}
+          for (const metric of flexibleMetrics) {
+            // Map metric name to athlete data
+            switch (metric.name) {
+              case 'attendance_rate':
+                metricValues[metric.id] = attendanceRate
+                break
+              case 'training_hours':
+                metricValues[metric.id] = trainingHours
+                break
+              case 'coach_rating':
+              case 'average_rating':
+                metricValues[metric.id] = avgRating
+                break
+              case 'training_sessions':
+                metricValues[metric.id] = trainingSessions
+                break
+              default:
+                // ใช้ default value สำหรับ metrics อื่นๆ
+                metricValues[metric.id] = metric.default_value || 0
+            }
+          }
+
+          // สร้าง tier thresholds จาก config
+          const tierThresholds = createTierThresholdsFromConfig(scoringConfigStore.clubConfig)
+
+          // คำนวณคะแนนด้วย Flexible Scoring System
+          const flexibleResult = calculateOverallScore({
+            categories: flexibleCategories,
+            metricsByCategory,
+            metricValues,
+            tierThresholds,
+            allowBonus: false
+          })
+
+          scoreBreakdown = {
+            attendance_score: flexibleResult.category_scores?.find(c => c.category_type === 'attendance')?.raw_score || 0,
+            training_score: flexibleResult.category_scores?.find(c => c.category_type === 'training')?.raw_score || 0,
+            rating_score: flexibleResult.category_scores?.find(c => c.category_type === 'skill')?.raw_score || 0,
+            base_score: flexibleResult.overall_score,
+            bonus_points: 0,
+            penalty_points: 0,
+            overall_score: flexibleResult.overall_score,
+            tier: flexibleResult.performance_tier,
+            applied_conditions: [],
+            criteria_used: 'flexible_scoring_system',
+            category_scores: flexibleResult.category_scores,
+            calculation_details: flexibleResult.calculation_details
+          }
+        } else {
+          // ใช้ระบบเดิม (backward compatibility)
+          // Calculate score using scoreCalculator with criteria and conditions (Requirement 4.4, 4.9)
+          scoreBreakdown = calculateScore(athleteStatsData, criteria, conditions)
+        }
 
         stats.push({
           athlete_id: athlete.id,
@@ -305,7 +390,10 @@ export const useEvaluationStore = defineStore('evaluation', () => {
           overall_score: scoreBreakdown.overall_score,
           performance_tier: scoreBreakdown.tier,
           applied_conditions: scoreBreakdown.applied_conditions,
-          criteria_used: scoreBreakdown.criteria_used
+          criteria_used: scoreBreakdown.criteria_used,
+          // เพิ่มข้อมูลจาก Flexible Scoring System
+          category_scores: scoreBreakdown.category_scores,
+          calculation_details: scoreBreakdown.calculation_details
         })
       }
 

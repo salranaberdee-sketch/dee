@@ -23,6 +23,15 @@ const routes = [
   { path: '/tournaments', name: 'Tournaments', component: () => import('@/views/Tournaments.vue'), meta: { requiresAuth: true } },
   { path: '/tournament-history', name: 'TournamentHistory', component: () => import('@/views/TournamentHistory.vue'), meta: { requiresAuth: true, roles: ['admin'] } },
   
+  // Flexible Scoring System - Admin & Coach (Requirements 1.1, 2.1, 8.1)
+  { path: '/scoring-config', name: 'ScoringConfig', component: () => import('@/views/ScoringConfigView.vue'), meta: { requiresAuth: true, roles: ['admin', 'coach'] } },
+  { path: '/scoring-config/history', name: 'ScoringConfigHistory', component: () => import('@/views/ScoringConfigHistoryView.vue'), meta: { requiresAuth: true, roles: ['admin', 'coach'] } },
+  { path: '/score-calculator', name: 'ScoreCalculator', component: () => import('@/views/ScoreCalculatorView.vue'), meta: { requiresAuth: true, roles: ['admin', 'coach'] } },
+  
+  // Athlete Progress Tracking - แผนพัฒนานักกีฬา
+  { path: '/training-plans', name: 'TrainingPlans', component: () => import('@/views/TrainingPlansView.vue'), meta: { requiresAuth: true, roles: ['admin', 'coach'] } },
+  { path: '/training-plans/:id', name: 'PlanDetail', component: () => import('@/views/PlanDetailView.vue'), meta: { requiresAuth: true, roles: ['admin', 'coach'] } },
+  
   // Athlete only
   { path: '/my-applications', name: 'MyApplications', component: () => import('@/views/MyApplications.vue'), meta: { requiresAuth: true, roles: ['athlete'] } },
   { path: '/leave-request', name: 'LeaveRequest', component: () => import('@/views/LeaveRequest.vue'), meta: { requiresAuth: true, roles: ['athlete'] } },

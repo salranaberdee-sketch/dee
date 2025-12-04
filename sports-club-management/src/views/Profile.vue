@@ -8,6 +8,7 @@ import AthleteHistory from '@/components/AthleteHistory.vue'
 import AlbumSection from '@/components/AlbumSection.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import ProfilePictureModal from '@/components/ProfilePictureModal.vue'
+import MyProgressSection from '@/components/MyProgressSection.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -570,6 +571,9 @@ function handleAvatarUpdated(newAvatarUrl) {
           :read-only="false"
           class="section"
         />
+
+        <!-- My Progress Section (Athletes only) -->
+        <MyProgressSection v-if="auth.isAthlete" class="section" />
 
         <!-- Menu Section -->
         <div v-if="filteredMenu.length" class="section">
