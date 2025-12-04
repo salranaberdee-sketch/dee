@@ -25,6 +25,7 @@ const sortBy = ref('name') // name, created_at, status
 const sortOrder = ref('asc')
 const selectedAthletes = ref([]) // สำหรับ bulk actions
 const showBulkActions = ref(false)
+const mainTab = ref('pending') // pending = รอตรวจสอบ, approved = อนุมัติแล้ว, all = ทั้งหมด
 
 // Form State
 const form = ref({ name: '', email: '', phone: '', coach_id: null, club_id: null })
@@ -108,7 +109,15 @@ const filteredAthletes = computed(() => {
     result = result.filter(a => a.club_id === filterClub.value)
   }
   
-  // Filter by status
+  // กรองตาม mainTab (หมวดหมู่หลัก)
+  if (mainTab.value === 'pending') {
+    result = result.filter(a => a.registration_status !== 'approved')
+  } else if (mainTab.value === 'approved') {
+    result = result.filter(a => a.registration_status === 'approved')
+  }
+  // mainTab === 'all' ไม่ต้องกรอง
+  
+  // Filter by status (เพิ่มเติมจาก mainTab)
   if (filterStatus.value) {
     if (filterStatus.value === 'approved') {
       result = result.filter(a => a.registration_status === 'approved')
@@ -378,6 +387,37 @@ async function bulkApprove() {
 }
 
 /**
+ * Bulk approve all pending - อนุมัติทั้งหมดที่รอตรวจสอบ
+ */
+async function bulkApproveAll() {
+  if (!auth.isAdmin) return
+  const pendingAthletes = filteredAthletes.value.filter(a => a.registration_status !== 'approved')
+  if (pendingAthletes.length === 0) return
+  
+  if (confirm(`ยืนยันอนุมัตินักกีฬาทั้งหมด ${pendingAthletes.length} คน?`)) {
+    for (const athlete of pendingAthletes) {
+      await data.updateAthlete(athlete.id, { registration_status: 'approved' })
+    }
+    await data.fetchAthletes()
+  }
+}
+
+/**
+ * Quick approve single athlete - อนุมัติรายบุคคล
+ */
+async function quickApprove(athlete, event) {
+  event.stopPropagation()
+  if (!auth.isAdmin) return
+  
+  if (confirm(`ยืนยันอนุมัตินักกีฬา "${athlete.name}"?`)) {
+    const result = await data.updateAthlete(athlete.id, { registration_status: 'approved' })
+    if (!result.success) {
+      alert(result.message || 'เกิดข้อผิดพลาด')
+    }
+  }
+}
+
+/**
  * Quick actions - โทรหานักกีฬา
  */
 function callAthlete(phone, event) {
@@ -558,6 +598,77 @@ function exportToCSV() {
     </div>
 
     <div class="container">
+      <!-- Main Category Tabs - แยกหมวดหมู่ชัดเจน -->
+      <div class="main-tabs">
+        <button 
+          :class="['main-tab', { active: mainTab === 'pending' }]" 
+          @click="mainTab = 'pending'; selectedAthletes = []"
+        >
+          <div class="tab-icon pending-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+          </div>
+          <div class="tab-content">
+            <span class="tab-title">รอตรวจสอบ</span>
+            <span class="tab-count pending-count">{{ athleteStats?.pending || 0 }}</span>
+          </div>
+        </button>
+        <button 
+          :class="['main-tab', { active: mainTab === 'approved' }]" 
+          @click="mainTab = 'approved'; selectedAthletes = []"
+        >
+          <div class="tab-icon approved-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
+              <polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+          </div>
+          <div class="tab-content">
+            <span class="tab-title">อนุมัติแล้ว</span>
+            <span class="tab-count approved-count">{{ athleteStats?.approved || 0 }}</span>
+          </div>
+        </button>
+        <button 
+          :class="['main-tab', { active: mainTab === 'all' }]" 
+          @click="mainTab = 'all'; selectedAthletes = []"
+        >
+          <div class="tab-icon all-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
+            </svg>
+          </div>
+          <div class="tab-content">
+            <span class="tab-title">ทั้งหมด</span>
+            <span class="tab-count">{{ athleteStats?.total || 0 }}</span>
+          </div>
+        </button>
+      </div>
+
+      <!-- Pending Athletes Alert -->
+      <div v-if="mainTab === 'pending' && athleteStats?.pending > 0" class="pending-alert">
+        <div class="alert-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+        </div>
+        <div class="alert-content">
+          <span class="alert-title">มีนักกีฬารอการอนุมัติ {{ athleteStats.pending }} คน</span>
+          <span class="alert-desc">กรุณาตรวจสอบข้อมูลและเอกสารก่อนอนุมัติ</span>
+        </div>
+        <button v-if="filteredAthletes.length > 0" class="btn-approve-all" @click="bulkApproveAll">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+          อนุมัติทั้งหมด
+        </button>
+      </div>
+
       <!-- Toolbar: Search + Filters + View Toggle -->
       <div class="toolbar">
         <div class="search-box">
@@ -675,7 +786,11 @@ function exportToCSV() {
 
       <!-- Grid View -->
       <div v-else-if="viewMode === 'grid'" class="athletes-grid">
-        <div v-for="a in filteredAthletes" :key="a.id" class="athlete-card" @click="viewDetail(a)">
+        <div v-for="a in filteredAthletes" :key="a.id" :class="['athlete-card', { 'card-pending': a.registration_status !== 'approved' }]" @click="viewDetail(a)">
+          <!-- Pending Badge -->
+          <div v-if="a.registration_status !== 'approved'" class="pending-ribbon">
+            <span>รอตรวจสอบ</span>
+          </div>
           <div class="card-header">
             <UserAvatar :avatar-url="a.user_profiles?.avatar_url" :user-name="a.name" size="md" />
             <div class="card-actions">
@@ -701,9 +816,23 @@ function exportToCSV() {
               <span v-if="a.birth_date" class="meta-item meta-age">{{ formatAge(a.birth_date) }}</span>
             </div>
             <div class="card-footer">
-              <span :class="['status-badge', a.registration_status === 'approved' ? 'status-approved' : 'status-pending']">
-                {{ a.registration_status === 'approved' ? 'อนุมัติแล้ว' : 'รอตรวจสอบ' }}
-              </span>
+              <!-- แสดงปุ่มอนุมัติสำหรับนักกีฬาที่รอตรวจสอบ -->
+              <template v-if="a.registration_status !== 'approved' && auth.isAdmin">
+                <button class="btn-approve-card" @click="quickApprove(a, $event)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                  อนุมัติ
+                </button>
+              </template>
+              <template v-else>
+                <span :class="['status-badge', 'status-approved']">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                  อนุมัติแล้ว
+                </span>
+              </template>
               <span class="view-detail">ดูรายละเอียด →</span>
             </div>
           </div>
@@ -1286,6 +1415,246 @@ function exportToCSV() {
 .stat-info { display: flex; flex-direction: column; }
 .stat-value { font-size: 24px; font-weight: 700; color: #171717; }
 .stat-label { font-size: 13px; color: #737373; }
+
+/* Main Category Tabs */
+.main-tabs {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #E5E5E5;
+}
+
+.main-tab {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  background: #fff;
+  border: 2px solid #E5E5E5;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex: 1;
+}
+
+.main-tab:hover {
+  border-color: #A3A3A3;
+}
+
+.main-tab.active {
+  border-color: #171717;
+  background: #171717;
+}
+
+.main-tab.active .tab-title,
+.main-tab.active .tab-count {
+  color: #fff;
+}
+
+.main-tab.active .tab-icon {
+  background: rgba(255,255,255,0.2);
+}
+
+.main-tab.active .tab-icon svg {
+  color: #fff;
+}
+
+.tab-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tab-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.tab-icon.pending-icon {
+  background: #FEF3C7;
+}
+
+.tab-icon.pending-icon svg {
+  color: #F59E0B;
+}
+
+.tab-icon.approved-icon {
+  background: #D1FAE5;
+}
+
+.tab-icon.approved-icon svg {
+  color: #22C55E;
+}
+
+.tab-icon.all-icon {
+  background: #F5F5F5;
+}
+
+.tab-icon.all-icon svg {
+  color: #525252;
+}
+
+.tab-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tab-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #171717;
+}
+
+.tab-count {
+  font-size: 20px;
+  font-weight: 700;
+  color: #171717;
+}
+
+.tab-count.pending-count {
+  color: #F59E0B;
+}
+
+.tab-count.approved-count {
+  color: #22C55E;
+}
+
+.main-tab.active .tab-count.pending-count,
+.main-tab.active .tab-count.approved-count {
+  color: #fff;
+}
+
+/* Pending Alert */
+.pending-alert {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  background: #FEF3C7;
+  border: 1px solid #F59E0B;
+  border-radius: 12px;
+  margin-bottom: 20px;
+}
+
+.alert-icon {
+  width: 44px;
+  height: 44px;
+  background: #F59E0B;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.alert-icon svg {
+  width: 22px;
+  height: 22px;
+  color: #fff;
+}
+
+.alert-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.alert-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #92400E;
+}
+
+.alert-desc {
+  font-size: 13px;
+  color: #B45309;
+}
+
+.btn-approve-all {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: #22C55E;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+
+.btn-approve-all:hover {
+  background: #16A34A;
+}
+
+.btn-approve-all svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Pending Card Style */
+.athlete-card.card-pending {
+  border: 2px solid #F59E0B;
+  position: relative;
+  overflow: hidden;
+}
+
+.pending-ribbon {
+  position: absolute;
+  top: 12px;
+  right: -30px;
+  background: #F59E0B;
+  color: #fff;
+  padding: 4px 40px;
+  font-size: 11px;
+  font-weight: 600;
+  transform: rotate(45deg);
+  z-index: 1;
+}
+
+.btn-approve-card {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: #22C55E;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-approve-card:hover {
+  background: #16A34A;
+}
+
+.btn-approve-card svg {
+  width: 16px;
+  height: 16px;
+}
+
+.status-badge svg {
+  width: 12px;
+  height: 12px;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
 
 /* Toolbar */
 .toolbar {
@@ -2293,6 +2662,42 @@ function exportToCSV() {
 
   .stats-row {
     grid-template-columns: repeat(2, 1fr);
+  }
+  
+  /* Main Tabs Mobile */
+  .main-tabs {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .main-tab {
+    padding: 12px 16px;
+  }
+  
+  .tab-icon {
+    width: 36px;
+    height: 36px;
+  }
+  
+  .tab-icon svg {
+    width: 18px;
+    height: 18px;
+  }
+  
+  .tab-count {
+    font-size: 18px;
+  }
+  
+  /* Pending Alert Mobile */
+  .pending-alert {
+    flex-direction: column;
+    text-align: center;
+    gap: 12px;
+  }
+  
+  .btn-approve-all {
+    width: 100%;
+    justify-content: center;
   }
   
   .toolbar {
