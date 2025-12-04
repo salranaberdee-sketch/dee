@@ -25,7 +25,7 @@ const sortBy = ref('name') // name, created_at, status
 const sortOrder = ref('asc')
 const selectedAthletes = ref([]) // สำหรับ bulk actions
 const showBulkActions = ref(false)
-const mainTab = ref('pending') // pending = รอตรวจสอบ, approved = อนุมัติแล้ว, all = ทั้งหมด
+const mainTab = ref('all') // all = ทั้งหมด (ค่าเริ่มต้น), pending = รอตรวจสอบ, approved = อนุมัติแล้ว
 
 // Form State
 const form = ref({ name: '', email: '', phone: '', coach_id: null, club_id: null })
@@ -2530,15 +2530,27 @@ function exportToCSV() {
     grid-template-columns: repeat(2, 1fr);
   }
   
-  /* Category Tabs Mobile */
+  /* Category Tabs Mobile - ยังคงแนวนอน */
   .category-tabs {
-    flex-direction: column;
-    gap: 4px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
   
   .cat-tab {
-    justify-content: space-between;
-    padding: 12px 16px;
+    padding: 10px 16px;
+    white-space: nowrap;
+    min-width: auto;
+    flex: none;
+  }
+  
+  .cat-tab-label {
+    font-size: 13px;
+  }
+  
+  .cat-tab-badge {
+    min-width: 20px;
+    height: 20px;
+    font-size: 11px;
   }
   
   /* Pending Banner Mobile */
