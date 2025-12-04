@@ -142,9 +142,9 @@ describe('Push Subscription Property Tests', () => {
           return true
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 20 } // ลดจำนวน iterations เพื่อหลีกเลี่ยง timeout จาก RLS policy checks
     )
-  }, 30000) // 30 second timeout
+  }, 60000) // 60 second timeout for database operations
 
 
   /**

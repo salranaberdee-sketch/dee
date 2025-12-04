@@ -2,12 +2,13 @@
 /**
  * NotificationSettings Component
  * Displays push notification settings with enable/disable toggles
+ * Enhanced with: Quiet Hours, Sound Settings, Vibration Settings, Test Notification
  * 
- * Requirements: 2.1, 4.3
+ * Requirements: 1.1, 1.2, 1.5, 2.1, 2.2, 2.4, 3.1, 3.4, 3.5, 4.1, 4.2, 4.4
  */
 import { ref, computed, onMounted, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
-import { useNotificationPreferencesStore } from '@/stores/notificationPreferences'
+import { useNotificationPreferencesStore, SOUND_OPTIONS, VIBRATION_PATTERNS } from '@/stores/notificationPreferences'
 import { 
   isPushSupported, 
   getPermissionStatus, 
@@ -24,6 +25,7 @@ const permissionStatus = ref(getPermissionStatus())
 const isSubscribing = ref(false)
 const message = ref('')
 const messageType = ref('success')
+const isSendingTest = ref(false)
 
 // Computed
 const pushSupported = computed(() => isPushSupported())
@@ -31,6 +33,29 @@ const isLoading = computed(() => notificationStore.loading)
 const preferences = computed(() => notificationStore.preferences)
 const subscriptionCount = computed(() => notificationStore.subscriptionCount)
 const isPushEnabled = computed(() => notificationStore.isPushEnabled)
+
+// Computed สำหรับ Quiet Hours
+const quietHoursEnabled = computed(() => notificationStore.quietHoursEnabled)
+const quietHoursStart = computed(() => notificationStore.quietHoursStart)
+const quietHoursEnd = computed(() => notificationStore.quietHoursEnd)
+
+// Computed สำหรับ Sound Settings
+const notificationSound = computed(() => notificationStore.notificationSound)
+
+// Computed สำหรับ Vibration Settings
+const vibrationEnabled = computed(() => notificationStore.vibrationEnabled)
+const vibrationPattern = computed(() => notificationStore.vibrationPattern)
+
+// ตัวเลือกรูปแบบการสั่น
+const vibrationPatternOptions = [
+  { key: 'short', label: 'สั้น' },
+  { key: 'medium', label: 'ปานกลาง' },
+  { key: 'long', label: 'ยาว' },
+  { key: 'pulse', label: 'เป็นจังหวะ' }
+]
+
+// ตรวจสอบว่า browser รองรับ Vibration API
+const vibrationSupported = computed(() => 'vibrate' in navigator)
 
 // Notification type definitions
 const notificationTypes = [
@@ -165,6 +190,108 @@ function getPermissionText() {
     default: return 'ยังไม่ได้ตั้งค่า'
   }
 }
+
+// Toggle Quiet Hours
+// Implements Requirement 1.1, 1.5
+async function toggleQuietHours() {
+  const newValue = !quietHoursEnabled.value
+  const result = await notificationStore.updateQuietHours(newValue)
+  
+  if (result.success) {
+    showMessage(newValue ? 'เปิดช่วงเวลาไม่รบกวนแล้ว' : 'ปิดช่วงเวลาไม่รบกวนแล้ว', 'success')
+  } else {
+    showMessage(result.error || 'ไม่สามารถอัปเดตการตั้งค่าได้', 'error')
+  }
+}
+
+// Update Quiet Hours time
+// Implements Requirement 1.2
+async function updateQuietHoursTime(type, value) {
+  const start = type === 'start' ? value : quietHoursStart.value
+  const end = type === 'end' ? value : quietHoursEnd.value
+  
+  const result = await notificationStore.updateQuietHours(quietHoursEnabled.value, start, end)
+  
+  if (!result.success) {
+    showMessage(result.error || 'ไม่สามารถอัปเดตเวลาได้', 'error')
+  }
+}
+
+// Update notification sound
+// Implements Requirement 2.3
+async function updateSound(sound) {
+  const result = await notificationStore.updateNotificationSound(sound)
+  
+  if (result.success) {
+    showMessage('บันทึกเสียงแจ้งเตือนแล้ว', 'success')
+  } else {
+    showMessage(result.error || 'ไม่สามารถอัปเดตเสียงได้', 'error')
+  }
+}
+
+// Preview sound
+// Implements Requirement 2.2
+function previewSound(sound) {
+  notificationStore.previewSound(sound)
+}
+
+// Toggle vibration
+// Implements Requirement 4.1
+async function toggleVibration() {
+  const newValue = !vibrationEnabled.value
+  const result = await notificationStore.updateVibrationSettings(newValue)
+  
+  if (result.success) {
+    showMessage(newValue ? 'เปิดการสั่นแล้ว' : 'ปิดการสั่นแล้ว', 'success')
+  } else {
+    showMessage(result.error || 'ไม่สามารถอัปเดตการตั้งค่าได้', 'error')
+  }
+}
+
+// Update vibration pattern
+// Implements Requirement 4.2
+async function updateVibrationPattern(pattern) {
+  const result = await notificationStore.updateVibrationSettings(vibrationEnabled.value, pattern)
+  
+  if (!result.success) {
+    showMessage(result.error || 'ไม่สามารถอัปเดตรูปแบบการสั่นได้', 'error')
+  }
+}
+
+// Test vibration
+// Implements Requirement 4.4
+function testVibration() {
+  const success = notificationStore.testVibration()
+  if (!success) {
+    showMessage('อุปกรณ์ไม่รองรับการสั่น', 'error')
+  }
+}
+
+// Send test notification
+// Implements Requirements 3.1, 3.4, 3.5
+async function sendTestNotification() {
+  // ตรวจสอบว่าออนไลน์อยู่หรือไม่
+  if (!navigator.onLine) {
+    showMessage('ไม่สามารถส่งการแจ้งเตือนทดสอบได้ กรุณาเชื่อมต่ออินเทอร์เน็ต', 'error')
+    return
+  }
+
+  isSendingTest.value = true
+  
+  try {
+    const result = await notificationStore.sendTestNotification()
+    
+    if (result.success) {
+      showMessage('ส่งการแจ้งเตือนทดสอบแล้ว', 'success')
+    } else {
+      showMessage(result.error || 'ไม่สามารถส่งการแจ้งเตือนทดสอบได้', 'error')
+    }
+  } catch (err) {
+    showMessage('เกิดข้อผิดพลาดในการส่งการแจ้งเตือน', 'error')
+  } finally {
+    isSendingTest.value = false
+  }
+}
 </script>
 
 <template>
@@ -256,6 +383,211 @@ function getPermissionText() {
             </svg>
             <span>{{ subscriptionCount }} อุปกรณ์ที่ลงทะเบียน</span>
           </div>
+        </div>
+      </div>
+
+      <!-- Quiet Hours Section -->
+      <!-- Implements Requirements 1.1, 1.2, 1.5 -->
+      <div v-if="permissionStatus === 'granted' && isPushEnabled" class="settings-card">
+        <div class="section-header">
+          <div class="section-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+            </svg>
+          </div>
+          <span class="section-title">ช่วงเวลาไม่รบกวน</span>
+        </div>
+
+        <div class="setting-content">
+          <div class="toggle-row">
+            <div class="toggle-info">
+              <span class="toggle-label">เปิดช่วงเวลาไม่รบกวน</span>
+              <span class="toggle-desc">ไม่รับการแจ้งเตือนในช่วงเวลาที่กำหนด</span>
+            </div>
+            <button 
+              :class="['toggle-switch', { active: quietHoursEnabled }]"
+              :disabled="isLoading"
+              @click="toggleQuietHours"
+            >
+              <span class="toggle-knob"></span>
+            </button>
+          </div>
+
+          <!-- Time Pickers - แสดงเมื่อเปิด Quiet Hours -->
+          <div v-if="quietHoursEnabled" class="time-pickers">
+            <div class="time-picker-row">
+              <div class="time-picker-item">
+                <label class="time-label">เริ่มต้น</label>
+                <input 
+                  type="time" 
+                  class="time-input"
+                  :value="quietHoursStart"
+                  :disabled="isLoading"
+                  @change="updateQuietHoursTime('start', $event.target.value)"
+                />
+              </div>
+              <div class="time-separator">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="5" y1="12" x2="19" y2="12"/>
+                  <polyline points="12 5 19 12 12 19"/>
+                </svg>
+              </div>
+              <div class="time-picker-item">
+                <label class="time-label">สิ้นสุด</label>
+                <input 
+                  type="time" 
+                  class="time-input"
+                  :value="quietHoursEnd"
+                  :disabled="isLoading"
+                  @change="updateQuietHoursTime('end', $event.target.value)"
+                />
+              </div>
+            </div>
+            <p class="time-hint">ตัวอย่าง: 22:00 ถึง 07:00 (ข้ามเที่ยงคืน)</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sound Settings Section -->
+      <!-- Implements Requirements 2.1, 2.2, 2.4 -->
+      <div v-if="permissionStatus === 'granted' && isPushEnabled" class="settings-card">
+        <div class="section-header">
+          <div class="section-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+              <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+            </svg>
+          </div>
+          <span class="section-title">เสียงแจ้งเตือน</span>
+        </div>
+
+        <div class="setting-content">
+          <div class="sound-options">
+            <div 
+              v-for="option in SOUND_OPTIONS" 
+              :key="option.key"
+              :class="['sound-option', { active: notificationSound === option.key }]"
+              @click="updateSound(option.key)"
+            >
+              <div class="sound-radio">
+                <div v-if="notificationSound === option.key" class="sound-radio-dot"></div>
+              </div>
+              <span class="sound-label">{{ option.label }}</span>
+              <button 
+                v-if="option.key !== 'none'"
+                class="preview-btn"
+                :disabled="isLoading"
+                @click.stop="previewSound(option.key)"
+                title="ฟังตัวอย่าง"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="5 3 19 12 5 21 5 3"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Vibration Settings Section -->
+      <!-- Implements Requirements 4.1, 4.2, 4.4 -->
+      <div v-if="permissionStatus === 'granted' && isPushEnabled" class="settings-card">
+        <div class="section-header">
+          <div class="section-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+              <line x1="12" y1="18" x2="12.01" y2="18"/>
+              <path d="M2 8v8"/>
+              <path d="M22 8v8"/>
+            </svg>
+          </div>
+          <span class="section-title">การสั่น</span>
+        </div>
+
+        <div class="setting-content">
+          <!-- แจ้งเตือนถ้าไม่รองรับ -->
+          <div v-if="!vibrationSupported" class="warning-inline">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <span>อุปกรณ์นี้ไม่รองรับการสั่น</span>
+          </div>
+
+          <template v-else>
+            <div class="toggle-row">
+              <div class="toggle-info">
+                <span class="toggle-label">เปิดการสั่น</span>
+                <span class="toggle-desc">สั่นเมื่อได้รับการแจ้งเตือน</span>
+              </div>
+              <button 
+                :class="['toggle-switch', { active: vibrationEnabled }]"
+                :disabled="isLoading"
+                @click="toggleVibration"
+              >
+                <span class="toggle-knob"></span>
+              </button>
+            </div>
+
+            <!-- Vibration Pattern Selector - แสดงเมื่อเปิดการสั่น -->
+            <div v-if="vibrationEnabled" class="vibration-settings">
+              <label class="setting-label">รูปแบบการสั่น</label>
+              <div class="pattern-options">
+                <button 
+                  v-for="option in vibrationPatternOptions" 
+                  :key="option.key"
+                  :class="['pattern-btn', { active: vibrationPattern === option.key }]"
+                  :disabled="isLoading"
+                  @click="updateVibrationPattern(option.key)"
+                >
+                  {{ option.label }}
+                </button>
+              </div>
+              <button 
+                class="test-vibration-btn"
+                :disabled="isLoading"
+                @click="testVibration"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+                  <line x1="12" y1="18" x2="12.01" y2="18"/>
+                </svg>
+                ทดสอบการสั่น
+              </button>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- Test Notification Section -->
+      <!-- Implements Requirements 3.1, 3.4, 3.5 -->
+      <div v-if="permissionStatus === 'granted' && isPushEnabled" class="settings-card">
+        <div class="section-header">
+          <div class="section-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+              <polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+          </div>
+          <span class="section-title">ทดสอบการแจ้งเตือน</span>
+        </div>
+
+        <div class="setting-content">
+          <p class="test-desc">ส่งการแจ้งเตือนทดสอบเพื่อตรวจสอบว่าการตั้งค่าทำงานถูกต้อง</p>
+          <button 
+            class="btn btn-primary test-notification-btn"
+            :disabled="isLoading || isSendingTest"
+            @click="sendTestNotification"
+          >
+            <svg v-if="isSendingTest" class="spinner" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+            </svg>
+            <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+            {{ isSendingTest ? 'กำลังส่ง...' : 'ส่งการแจ้งเตือนทดสอบ' }}
+          </button>
         </div>
       </div>
 
@@ -619,10 +951,242 @@ function getPermissionText() {
 @keyframes spin { to { transform: rotate(360deg); } }
 .spinner { animation: spin 1s linear infinite; }
 
+/* Settings Card - สำหรับ sections ใหม่ */
+.settings-card {
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid #E5E5E5;
+  overflow: hidden;
+}
+.setting-content {
+  padding: 16px 20px;
+}
+.setting-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #525252;
+  margin-bottom: 10px;
+}
+
+/* Time Pickers - Quiet Hours */
+.time-pickers {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #F5F5F5;
+}
+.time-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.time-picker-item {
+  flex: 1;
+}
+.time-label {
+  display: block;
+  font-size: 12px;
+  color: #737373;
+  margin-bottom: 6px;
+}
+.time-input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #E5E5E5;
+  border-radius: 10px;
+  font-size: 15px;
+  color: #171717;
+  background: #FAFAFA;
+  transition: border-color 0.15s;
+}
+.time-input:focus {
+  outline: none;
+  border-color: #171717;
+  background: #fff;
+}
+.time-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.time-separator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 20px;
+  color: #A3A3A3;
+}
+.time-hint {
+  font-size: 12px;
+  color: #737373;
+  margin-top: 10px;
+}
+
+/* Sound Options */
+.sound-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sound-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #E5E5E5;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.sound-option:hover {
+  background: #FAFAFA;
+}
+.sound-option.active {
+  border-color: #171717;
+  background: #F5F5F5;
+}
+.sound-radio {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #D4D4D4;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.sound-option.active .sound-radio {
+  border-color: #171717;
+}
+.sound-radio-dot {
+  width: 10px;
+  height: 10px;
+  background: #171717;
+  border-radius: 50%;
+}
+.sound-label {
+  flex: 1;
+  font-size: 14px;
+  color: #171717;
+}
+.preview-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: #F5F5F5;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+.preview-btn:hover {
+  background: #E5E5E5;
+}
+.preview-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.preview-btn svg {
+  color: #525252;
+}
+
+/* Vibration Settings */
+.vibration-settings {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #F5F5F5;
+}
+.pattern-options {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.pattern-btn {
+  padding: 10px 16px;
+  border: 1px solid #E5E5E5;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 13px;
+  color: #525252;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.pattern-btn:hover {
+  background: #FAFAFA;
+}
+.pattern-btn.active {
+  border-color: #171717;
+  background: #171717;
+  color: #fff;
+}
+.pattern-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.test-vibration-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 1px solid #E5E5E5;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 13px;
+  color: #525252;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.test-vibration-btn:hover {
+  background: #FAFAFA;
+  border-color: #D4D4D4;
+}
+.test-vibration-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Warning Inline */
+.warning-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  background: #FEF3C7;
+  border-radius: 10px;
+  font-size: 13px;
+  color: #92400E;
+}
+
+/* Test Notification */
+.test-desc {
+  font-size: 14px;
+  color: #737373;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+.test-notification-btn {
+  width: 100%;
+}
+
 /* Responsive */
 @media (max-width: 480px) {
   .type-desc {
     display: none;
+  }
+  .time-picker-row {
+    flex-direction: column;
+    gap: 16px;
+  }
+  .time-separator {
+    padding-top: 0;
+    transform: rotate(90deg);
+  }
+  .pattern-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
 }
 </style>

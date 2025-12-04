@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Generate Notification Sounds</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    button { margin: 10px; padding: 10px 20px; cursor: pointer; }
+    .sound-item { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 8px; }
+    h1 { color: #333; }
+  </style>
+</head>
+<body>
+  <h1>🔊 ทดสอบเสียงแจ้งเตือน</h1>
+  <p>คลิกปุ่มเพื่อทดสอบเสียงแต่ละประเภท</p>
+  
+  <div class="sound-item">
+    <h3>Default - เสียงเริ่มต้น</h3>
+    <button onclick="playDefault()">▶️ เล่นเสียง</button>
+  </div>
+  
+  <div class="sound-item">
+    <h3>Chime - เสียงระฆัง</h3>
+    <button onclick="playChime()">▶️ เล่นเสียง</button>
+  </div>
+  
+  <div class="sound-item">
+    <h3>Bell - เสียงกระดิ่ง</h3>
+    <button onclick="playBell()">▶️ เล่นเสียง</button>
+  </div>
+  
+  <div class="sound-item">
+    <h3>Soft - เสียงนุ่มนวล</h3>
+    <button onclick="playSoft()">▶️ เล่นเสียง</button>
+  </div>
+
+  <script>
+    let audioContext = null;
+    
+    function getAudioContext() {
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      return audioContext;
+    }
+    
+    function playTone(frequency, duration, type = 'sine', volume = 0.3, delay = 0) {
+      const ctx = getAudioContext();
+      if (ctx.state === 'suspended') ctx.resume();
+      
+      const oscillator = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      
+      oscillator.type = type;
+      oscillator.frequency.value = frequency;
+      
+      const startTime = ctx.currentTime + delay;
+      const endTime = startTime + duration;
+      
+      gainNode.gain.setValueAtTime(0, startTime);
+      gainNode.gain.linearRampToValueAtTime(volume, startTime + 0.01);
+      gainNode.gain.linearRampToValueAtTime(volume, endTime - 0.05);
+      gainNode.gain.linearRampToValueAtTime(0, endTime);
+      
+      oscillator.start(startTime);
+      oscillator.stop(endTime);
+    }
+    
+    function playDefault() {
+      playTone(523.25, 0.15, 'sine', 0.3, 0);
+      playTone(659.25, 0.2, 'sine', 0.3, 0.15);
+    }
+    
+    function playChime() {
+      playTone(880, 0.4, 'sine', 0.2, 0);
+      playTone(1760, 0.3, 'sine', 0.1, 0);
+      playTone(1108.73, 0.35, 'sine', 0.15, 0.1);
+    }
+    
+    function playBell() {
+      playTone(1318.51, 0.1, 'sine', 0.25, 0);
+      playTone(1567.98, 0.1, 'sine', 0.2, 0.08);
+      playTone(1318.51, 0.15, 'sine', 0.25, 0.16);
+    }
+    
+    function playSoft() {
+      const ctx = getAudioContext();
+      if (ctx.state === 'suspended') ctx.resume();
+      
+      const oscillator = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      
+      oscillator.type = 'sine';
+      oscillator.frequency.value = 440;
+      
+      const startTime = ctx.currentTime;
+      const duration = 0.5;
+      
+      gainNode.gain.setValueAtTime(0, startTime);
+      gainNode.gain.linearRampToValueAtTime(0.15, startTime + 0.1);
+      gainNode.gain.linearRampToValueAtTime(0.15, startTime + duration - 0.2);
+      gainNode.gain.linearRampToValueAtTime(0, startTime + duration);
+      
+      oscillator.start(startTime);
+      oscillator.stop(startTime + duration);
+    }
+  </script>
+</body>
+</html>

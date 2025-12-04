@@ -32,4 +32,17 @@ if ('serviceWorker' in navigator) {
       }
     })
   })
+  
+  // รับ message จาก Service Worker เพื่อเล่นเสียงแจ้งเตือน
+  // Implements Requirement 2.5
+  navigator.serviceWorker.addEventListener('message', async (event) => {
+    if (event.data?.type === 'PLAY_NOTIFICATION_SOUND') {
+      try {
+        const { playNotificationSound } = await import('@/lib/notificationSounds')
+        playNotificationSound(event.data.sound)
+      } catch (err) {
+        console.warn('ไม่สามารถเล่นเสียงแจ้งเตือนได้:', err)
+      }
+    }
+  })
 }
