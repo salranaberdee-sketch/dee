@@ -33,7 +33,7 @@ const navItems = computed(() => {
   const items = [
     { to: '/', icon: 'home', label: 'หน้าหลัก', roles: ['admin', 'coach', 'athlete'] },
     { to: '/events', icon: 'event', label: 'กิจกรรม', roles: ['admin', 'coach', 'athlete'] },
-    { to: '/tournaments', icon: 'trophy', label: 'ทัวนาเมนต์', roles: ['admin', 'coach', 'athlete'] },
+    { to: '/albums', icon: 'album', label: 'จัดการอัลบั้ม', roles: ['admin', 'coach'] },
     { to: '/notifications', icon: 'bell', label: 'แจ้งเตือน', roles: ['admin', 'coach', 'athlete'] },
     { to: '/profile', icon: 'user', label: 'โปรไฟล์', roles: ['admin', 'coach', 'athlete'] },
   ]
@@ -73,6 +73,12 @@ function isActive(to) {
         </svg>
         <svg v-else-if="item.icon === 'trophy'" viewBox="0 0 24 24" fill="none" stroke="currentColor">
           <path d="M6 9H4.5a2.5 2.5 0 010-5H6M18 9h1.5a2.5 2.5 0 000-5H18M4 22h16M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20 7 22M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20 17 22M18 2H6v7a6 6 0 0012 0V2z"/>
+        </svg>
+        <!-- Album icon for album management (Requirements 1.1, 3.1) -->
+        <svg v-else-if="item.icon === 'album'" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+          <circle cx="8.5" cy="8.5" r="1.5"/>
+          <polyline points="21 15 16 10 5 21"/>
         </svg>
         <!-- Use NotificationBadge component for bell icon (Requirements 3.1) -->
         <NotificationBadge v-else-if="item.icon === 'bell'" />

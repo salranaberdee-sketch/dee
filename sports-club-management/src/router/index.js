@@ -46,6 +46,11 @@ const routes = [
   { path: '/notification-settings', name: 'NotificationSettings', component: () => import('@/views/NotificationSettings.vue'), meta: { requiresAuth: true } },
   { path: '/profile', name: 'Profile', component: () => import('@/views/Profile.vue'), meta: { requiresAuth: true } },
   { path: '/profile/albums/:albumId', name: 'AlbumDetail', component: () => import('@/views/AlbumDetail.vue'), meta: { requiresAuth: true } },
+  
+  // Album Management - Coach & Admin (Requirements 1.1, 3.1, 4.4)
+  { path: '/albums', name: 'AlbumManagement', component: () => import('@/views/AlbumManagement.vue'), meta: { requiresAuth: true, roles: ['admin', 'coach'] } },
+  { path: '/albums/club/:clubId', name: 'AlbumClubAthletes', component: () => import('@/views/AlbumManagement.vue'), meta: { requiresAuth: true, roles: ['admin'] } },
+  { path: '/albums/athlete/:userId', name: 'AthleteAlbumView', component: () => import('@/views/AthleteAlbumView.vue'), meta: { requiresAuth: true, roles: ['admin', 'coach'] } },
 ]
 
 const router = createRouter({ history: createWebHistory(), routes })
