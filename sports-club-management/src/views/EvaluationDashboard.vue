@@ -2,210 +2,202 @@
   <div class="evaluation-dashboard">
     <!-- Header -->
     <div class="page-header">
-      <div class="header-row">
-        <div>
-          <h1>ประเมินผลนักกีฬา</h1>
-          <p class="subtitle">ติดตามและวัดผลการพัฒนาของนักกีฬา</p>
-        </div>
-        <div class="header-actions">
-          <router-link to="/score-calculator" class="btn-settings primary">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-            </svg>
-            คำนวณคะแนน
-          </router-link>
-          <router-link to="/scoring-config" class="btn-settings">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-            </svg>
-            ตั้งค่าเกณฑ์
-          </router-link>
-        </div>
-      </div>
-    </div>
-
-    <!-- Filters -->
-    <div class="filters-section">
-      <div class="filter-row">
-        <div class="filter-group">
-          <label>เดือน</label>
+      <div class="header-left">
+        <h1>ประเมินผลนักกีฬา</h1>
+        <div class="month-selector">
           <input 
             type="month" 
             v-model="selectedMonth"
             @change="loadData"
             class="month-input"
           />
-        </div>
-        <div class="filter-group">
-          <label>ระดับผลงาน</label>
-          <select v-model="filterTier" class="tier-select">
-            <option value="">ทั้งหมด</option>
-            <option value="excellent">ดีเยี่ยม</option>
-            <option value="good">ดี</option>
-            <option value="average">ปานกลาง</option>
-            <option value="needs_improvement">ต้องปรับปรุง</option>
-          </select>
+          <button @click="loadData" class="btn-refresh" :disabled="loading">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+            </svg>
+          </button>
         </div>
       </div>
-      <button @click="loadData" class="btn-refresh" :disabled="loading">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
-        </svg>
-        รีเฟรช
-      </button>
+      <div class="header-actions">
+        <router-link to="/score-calculator" class="btn-action primary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+          </svg>
+          คำนวณคะแนน
+        </router-link>
+        <router-link to="/scoring-config" class="btn-action">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+          </svg>
+          ตั้งค่า
+        </router-link>
+      </div>
     </div>
 
-    <!-- Summary Cards -->
-    <div class="summary-cards">
-      <div class="summary-card" @click="filterTier = filterTier === 'excellent' ? '' : 'excellent'" :class="{ active: filterTier === 'excellent' }">
-        <div class="card-icon excellent">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-          </svg>
-        </div>
-        <div class="card-content">
-          <span class="card-value">{{ tierCounts.excellent }}</span>
-          <span class="card-label">ดีเยี่ยม</span>
-        </div>
+    <!-- Quick Stats Bar -->
+    <div class="quick-stats">
+      <div class="stat-item" :class="{ active: filterTier === '' }" @click="filterTier = ''">
+        <span class="stat-count">{{ evaluationStore.athleteStats.length }}</span>
+        <span class="stat-label">ทั้งหมด</span>
       </div>
-
-      <div class="summary-card" @click="filterTier = filterTier === 'good' ? '' : 'good'" :class="{ active: filterTier === 'good' }">
-        <div class="card-icon good">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
-            <polyline points="22 4 12 14.01 9 11.01"/>
-          </svg>
-        </div>
-        <div class="card-content">
-          <span class="card-value">{{ tierCounts.good }}</span>
-          <span class="card-label">ดี</span>
-        </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item excellent" :class="{ active: filterTier === 'excellent' }" @click="toggleFilter('excellent')">
+        <span class="stat-count">{{ tierCounts.excellent }}</span>
+        <span class="stat-label">ดีเยี่ยม</span>
       </div>
-
-      <div class="summary-card" @click="filterTier = filterTier === 'average' ? '' : 'average'" :class="{ active: filterTier === 'average' }">
-        <div class="card-icon average">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="8" y1="12" x2="16" y2="12"/>
-          </svg>
-        </div>
-        <div class="card-content">
-          <span class="card-value">{{ tierCounts.average }}</span>
-          <span class="card-label">ปานกลาง</span>
-        </div>
+      <div class="stat-item good" :class="{ active: filterTier === 'good' }" @click="toggleFilter('good')">
+        <span class="stat-count">{{ tierCounts.good }}</span>
+        <span class="stat-label">ดี</span>
       </div>
-
-      <div class="summary-card" @click="filterTier = filterTier === 'needs_improvement' ? '' : 'needs_improvement'" :class="{ active: filterTier === 'needs_improvement' }">
-        <div class="card-icon warning">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
-            <line x1="12" y1="9" x2="12" y2="13"/>
-            <line x1="12" y1="17" x2="12.01" y2="17"/>
-          </svg>
-        </div>
-        <div class="card-content">
-          <span class="card-value">{{ tierCounts.needs_improvement }}</span>
-          <span class="card-label">ต้องปรับปรุง</span>
-        </div>
+      <div class="stat-item average" :class="{ active: filterTier === 'average' }" @click="toggleFilter('average')">
+        <span class="stat-count">{{ tierCounts.average }}</span>
+        <span class="stat-label">ปานกลาง</span>
+      </div>
+      <div class="stat-item warning" :class="{ active: filterTier === 'needs_improvement' }" @click="toggleFilter('needs_improvement')">
+        <span class="stat-count">{{ tierCounts.needs_improvement }}</span>
+        <span class="stat-label">ต้องปรับปรุง</span>
       </div>
     </div>
 
     <!-- Loading -->
     <div v-if="loading" class="loading-state">
       <div class="spinner"></div>
-      <p>กำลังโหลดข้อมูล...</p>
     </div>
 
-    <!-- Athletes Table -->
-    <div v-else class="athletes-section">
-      <div class="section-header">
-        <h2>รายชื่อนักกีฬา ({{ filteredAthletes.length }} คน)</h2>
+    <!-- Ranking Grid -->
+    <div v-else class="ranking-section">
+      <!-- Top 3 Podium -->
+      <div v-if="filteredAthletes.length >= 3 && !filterTier" class="podium">
+        <div class="podium-item second" @click="goToDetail(filteredAthletes[1])">
+          <div class="podium-rank">2</div>
+          <div class="podium-avatar">
+            <span>{{ getInitials(filteredAthletes[1].athlete_name) }}</span>
+          </div>
+          <div class="podium-name">{{ filteredAthletes[1].athlete_name }}</div>
+          <div class="podium-score">{{ filteredAthletes[1].overall_score }}</div>
+          <div class="podium-bar"></div>
+        </div>
+        <div class="podium-item first" @click="goToDetail(filteredAthletes[0])">
+          <div class="podium-crown">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5z"/>
+            </svg>
+          </div>
+          <div class="podium-rank">1</div>
+          <div class="podium-avatar gold">
+            <span>{{ getInitials(filteredAthletes[0].athlete_name) }}</span>
+          </div>
+          <div class="podium-name">{{ filteredAthletes[0].athlete_name }}</div>
+          <div class="podium-score">{{ filteredAthletes[0].overall_score }}</div>
+          <div class="podium-bar"></div>
+        </div>
+        <div class="podium-item third" @click="goToDetail(filteredAthletes[2])">
+          <div class="podium-rank">3</div>
+          <div class="podium-avatar">
+            <span>{{ getInitials(filteredAthletes[2].athlete_name) }}</span>
+          </div>
+          <div class="podium-name">{{ filteredAthletes[2].athlete_name }}</div>
+          <div class="podium-score">{{ filteredAthletes[2].overall_score }}</div>
+          <div class="podium-bar"></div>
+        </div>
+      </div>
+
+      <!-- Ranking List -->
+      <div class="ranking-list">
+        <div class="list-header">
+          <span>อันดับ</span>
+          <span>นักกีฬา</span>
+          <span>คะแนน</span>
+          <span>สถานะ</span>
+        </div>
+        
+        <div 
+          v-for="(athlete, index) in displayAthletes" 
+          :key="athlete.athlete_id"
+          class="ranking-item"
+          :class="{ 
+            'top-three': getRealRank(index) <= 3 && !filterTier,
+            'needs-attention': athlete.performance_tier === 'needs_improvement'
+          }"
+          @click="goToDetail(athlete)"
+        >
+          <div class="rank-badge" :class="getRankClass(getRealRank(index))">
+            {{ getRealRank(index) }}
+          </div>
+          
+          <div class="athlete-info">
+            <div class="athlete-avatar" :class="athlete.performance_tier">
+              {{ getInitials(athlete.athlete_name) }}
+            </div>
+            <div class="athlete-details">
+              <span class="athlete-name">{{ athlete.athlete_name }}</span>
+              <span class="athlete-meta">
+                <span class="meta-item">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
+                    <polyline points="22 4 12 14.01 9 11.01"/>
+                  </svg>
+                  {{ athlete.attendance_rate }}%
+                </span>
+                <span class="meta-item">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>
+                  </svg>
+                  {{ athlete.training_sessions }}
+                </span>
+              </span>
+            </div>
+          </div>
+          
+          <div class="score-display">
+            <div class="score-circle" :class="athlete.performance_tier">
+              <svg viewBox="0 0 36 36">
+                <path
+                  class="score-bg"
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                />
+                <path
+                  class="score-fill"
+                  :stroke-dasharray="`${athlete.overall_score}, 100`"
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                />
+              </svg>
+              <span class="score-value">{{ athlete.overall_score }}</span>
+            </div>
+          </div>
+          
+          <div class="tier-indicator">
+            <span class="tier-badge" :class="athlete.performance_tier">
+              {{ getTierLabel(athlete.performance_tier) }}
+            </span>
+            <svg class="arrow-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 18l6-6-6-6"/>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Empty State -->
+        <div v-if="filteredAthletes.length === 0" class="empty-state">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
+          </svg>
+          <p>ไม่พบข้อมูลนักกีฬา</p>
+        </div>
+      </div>
+
+      <!-- Export Button -->
+      <div v-if="filteredAthletes.length > 0" class="export-section">
         <button @click="exportReport" class="btn-export">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
             <polyline points="7 10 12 15 17 10"/>
             <line x1="12" y1="15" x2="12" y2="3"/>
           </svg>
-          Export
+          ดาวน์โหลดรายงาน
         </button>
-      </div>
-
-      <div class="table-container">
-        <table class="athletes-table">
-          <thead>
-            <tr>
-              <th>อันดับ</th>
-              <th>ชื่อ</th>
-              <th>ระดับ</th>
-              <th>คะแนนรวม</th>
-              <th>เข้าร่วม</th>
-              <th>ฝึกซ้อม</th>
-              <th>Rating</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(athlete, index) in filteredAthletes" :key="athlete.athlete_id">
-              <td class="rank-cell">
-                <span class="rank" :class="getRankClass(index + 1)">{{ index + 1 }}</span>
-              </td>
-              <td class="name-cell">
-                <div class="athlete-info">
-                  <span class="name">{{ athlete.athlete_name }}</span>
-                  <span class="email">{{ athlete.athlete_email }}</span>
-                </div>
-              </td>
-              <td>
-                <span class="tier-badge" :class="athlete.performance_tier">
-                  {{ getTierLabel(athlete.performance_tier) }}
-                </span>
-              </td>
-              <td class="score-cell">
-                <div class="score-bar">
-                  <div class="score-fill" :style="{ width: athlete.overall_score + '%' }"></div>
-                </div>
-                <span class="score-value">{{ athlete.overall_score }}</span>
-              </td>
-              <td>
-                <div class="attendance-stats">
-                  <span class="stat on-time">{{ athlete.attended_on_time }}</span>
-                  <span class="stat late">{{ athlete.attended_late }}</span>
-                  <span class="stat leave">{{ athlete.leave_count }}</span>
-                  <span class="stat absent">{{ athlete.absent_count }}</span>
-                </div>
-                <span class="rate">{{ athlete.attendance_rate }}%</span>
-              </td>
-              <td>
-                <span class="training-info">
-                  {{ athlete.training_sessions }} ครั้ง
-                  <small>({{ athlete.training_hours }} ชม.)</small>
-                </span>
-              </td>
-              <td>
-                <div class="rating-stars">
-                  <span v-for="i in 5" :key="i" class="star" :class="{ filled: i <= Math.round(athlete.average_rating) }">★</span>
-                </div>
-                <span class="rating-value">{{ athlete.average_rating }}</span>
-              </td>
-              <td>
-                <router-link :to="`/evaluation/athlete/${athlete.athlete_id}`" class="btn-detail">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M9 18l6-6-6-6"/>
-                  </svg>
-                </router-link>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div v-if="filteredAthletes.length === 0" class="empty-state">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
-          <circle cx="9" cy="7" r="4"/>
-          <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
-        </svg>
-        <p>ไม่พบข้อมูลนักกีฬา</p>
       </div>
     </div>
   </div>
@@ -213,9 +205,11 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useEvaluationStore } from '../stores/evaluation'
 import { useAuthStore } from '../stores/auth'
 
+const router = useRouter()
 const evaluationStore = useEvaluationStore()
 const authStore = useAuthStore()
 
@@ -224,6 +218,7 @@ const filterTier = ref('')
 
 const loading = computed(() => evaluationStore.loading)
 
+// นับจำนวนแต่ละระดับ
 const tierCounts = computed(() => {
   const counts = { excellent: 0, good: 0, average: 0, needs_improvement: 0 }
   evaluationStore.athleteStats.forEach(a => {
@@ -233,15 +228,49 @@ const tierCounts = computed(() => {
   return counts
 })
 
+// กรองตามระดับ
 const filteredAthletes = computed(() => {
   if (!filterTier.value) return evaluationStore.athleteStats
   return evaluationStore.athleteStats.filter(a => a.performance_tier === filterTier.value)
 })
 
+// แสดงรายการ (ข้าม 3 อันดับแรกถ้าไม่ได้กรอง)
+const displayAthletes = computed(() => {
+  if (filterTier.value || filteredAthletes.value.length < 3) {
+    return filteredAthletes.value
+  }
+  return filteredAthletes.value.slice(3)
+})
+
+// คำนวณอันดับจริง
+function getRealRank(index) {
+  if (filterTier.value || filteredAthletes.value.length < 3) {
+    return index + 1
+  }
+  return index + 4
+}
+
+// สลับ filter
+function toggleFilter(tier) {
+  filterTier.value = filterTier.value === tier ? '' : tier
+}
+
+// ดึงตัวอักษรย่อ
+function getInitials(name) {
+  if (!name) return '?'
+  const parts = name.split(' ')
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[1][0]).toUpperCase()
+  }
+  return name.substring(0, 2).toUpperCase()
+}
+
+// แปลงระดับเป็นข้อความ
 function getTierLabel(tier) {
   return evaluationStore.getTierLabel(tier)
 }
 
+// class สำหรับอันดับ
 function getRankClass(rank) {
   if (rank === 1) return 'gold'
   if (rank === 2) return 'silver'
@@ -249,11 +278,18 @@ function getRankClass(rank) {
   return ''
 }
 
+// ไปหน้ารายละเอียด
+function goToDetail(athlete) {
+  router.push(`/evaluation/athlete/${athlete.athlete_id}`)
+}
+
+// โหลดข้อมูล
 async function loadData() {
   const clubId = authStore.profile?.club_id
   await evaluationStore.calculateAthleteStats(clubId, selectedMonth.value)
 }
 
+// Export รายงาน
 function exportReport() {
   const data = filteredAthletes.value.map((a, i) => ({
     อันดับ: i + 1,
@@ -287,42 +323,69 @@ onMounted(() => {
 
 <style scoped>
 .evaluation-dashboard {
-  padding: 1.5rem;
-  max-width: 1400px;
+  padding: 1rem;
+  max-width: 800px;
   margin: 0 auto;
 }
 
+/* Header */
 .page-header {
-  margin-bottom: 1.5rem;
-}
-
-.header-row {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  gap: 1rem;
+  align-items: center;
+  margin-bottom: 1rem;
   flex-wrap: wrap;
+  gap: 1rem;
 }
 
-.page-header h1 {
-  font-size: 1.75rem;
+.header-left h1 {
+  font-size: 1.5rem;
   font-weight: 700;
   color: #171717;
-  margin: 0;
+  margin: 0 0 0.5rem;
 }
 
-.subtitle {
-  color: #737373;
-  margin: 0.25rem 0 0;
+.month-selector {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.month-input {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #E5E5E5;
+  border-radius: 8px;
+  font-size: 0.875rem;
+}
+
+.btn-refresh {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #171717;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.btn-refresh:disabled {
+  opacity: 0.5;
+}
+
+.btn-refresh svg {
+  width: 18px;
+  height: 18px;
 }
 
 .header-actions {
   display: flex;
   gap: 0.5rem;
-  flex-wrap: wrap;
 }
 
-.btn-settings {
+.btn-action {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -333,158 +396,95 @@ onMounted(() => {
   font-size: 0.875rem;
   color: #525252;
   text-decoration: none;
-  transition: all 0.15s;
 }
 
-.btn-settings:hover {
+.btn-action:hover {
   background: #F5F5F5;
-  color: #171717;
 }
 
-.btn-settings.primary {
+.btn-action.primary {
   background: #171717;
   color: #fff;
   border-color: #171717;
 }
 
-.btn-settings.primary:hover {
-  opacity: 0.9;
-}
-
-.btn-settings svg {
-  width: 18px;
-  height: 18px;
-}
-
-.filters-section {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-  padding: 1rem;
-  background: #fff;
-  border: 1px solid #E5E5E5;
-  border-radius: 12px;
-}
-
-.filter-row {
-  display: flex;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
-.filter-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.filter-group label {
-  font-size: 0.875rem;
-  color: #525252;
-}
-
-.month-input, .tier-select {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #E5E5E5;
-  border-radius: 8px;
-  font-size: 0.875rem;
-  background: #fff;
-}
-
-.btn-refresh {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  background: #171717;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 0.875rem;
-}
-
-.btn-refresh:disabled {
-  opacity: 0.5;
-}
-
-.btn-refresh svg {
+.btn-action svg {
   width: 16px;
   height: 16px;
 }
 
-.summary-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-  margin-bottom: 2rem;
-}
-
-.summary-card {
+/* Quick Stats */
+.quick-stats {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 1.25rem;
+  gap: 0.25rem;
+  padding: 0.75rem;
   background: #fff;
-  border: 2px solid #E5E5E5;
+  border: 1px solid #E5E5E5;
   border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.15s;
+  margin-bottom: 1.5rem;
+  overflow-x: auto;
 }
 
-.summary-card:hover {
-  border-color: #D4D4D4;
-  transform: translateY(-2px);
-}
-
-.summary-card.active {
-  border-color: #171717;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-}
-
-.card-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.card-icon svg {
-  width: 24px;
-  height: 24px;
-}
-
-.card-icon.excellent { background: #D1FAE5; color: #065F46; }
-.card-icon.good { background: #DBEAFE; color: #1E40AF; }
-.card-icon.average { background: #FEF3C7; color: #92400E; }
-.card-icon.warning { background: #FEE2E2; color: #991B1B; }
-
-.card-content {
+.stat-item {
   display: flex;
   flex-direction: column;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+  min-width: 60px;
 }
 
-.card-value {
-  font-size: 1.5rem;
+.stat-item:hover {
+  background: #F5F5F5;
+}
+
+.stat-item.active {
+  background: #171717;
+}
+
+.stat-item.active .stat-count,
+.stat-item.active .stat-label {
+  color: #fff;
+}
+
+.stat-count {
+  font-size: 1.25rem;
   font-weight: 700;
   color: #171717;
 }
 
-.card-label {
-  font-size: 0.875rem;
+.stat-label {
+  font-size: 0.7rem;
   color: #737373;
 }
 
+.stat-item.excellent .stat-count { color: #059669; }
+.stat-item.good .stat-count { color: #2563EB; }
+.stat-item.average .stat-count { color: #D97706; }
+.stat-item.warning .stat-count { color: #DC2626; }
+
+.stat-item.excellent.active,
+.stat-item.good.active,
+.stat-item.average.active,
+.stat-item.warning.active {
+  background: #171717;
+}
+
+.stat-divider {
+  width: 1px;
+  height: 32px;
+  background: #E5E5E5;
+  margin: 0 0.5rem;
+}
+
+/* Loading */
 .loading-state {
   display: flex;
-  flex-direction: column;
-  align-items: center;
+  justify-content: center;
   padding: 3rem;
-  color: #737373;
 }
 
 .spinner {
@@ -500,217 +500,367 @@ onMounted(() => {
   to { transform: rotate(360deg); }
 }
 
-.athletes-section {
+/* Podium */
+.podium {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+  padding: 1rem 0;
+}
+
+.podium-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+.podium-item:hover {
+  transform: translateY(-4px);
+}
+
+.podium-item.first {
+  order: 2;
+}
+
+.podium-item.second {
+  order: 1;
+}
+
+.podium-item.third {
+  order: 3;
+}
+
+.podium-crown {
+  color: #F59E0B;
+  margin-bottom: -8px;
+}
+
+.podium-crown svg {
+  width: 28px;
+  height: 28px;
+}
+
+.podium-rank {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #737373;
+  margin-bottom: 0.25rem;
+}
+
+.podium-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #E5E5E5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 1rem;
+  color: #525252;
+  margin-bottom: 0.5rem;
+}
+
+.podium-avatar.gold {
+  background: #FEF3C7;
+  color: #92400E;
+  border: 3px solid #F59E0B;
+}
+
+.podium-item.second .podium-avatar {
+  width: 48px;
+  height: 48px;
+  background: #F3F4F6;
+  border: 2px solid #9CA3AF;
+}
+
+.podium-item.third .podium-avatar {
+  width: 44px;
+  height: 44px;
+  background: #FED7AA;
+  border: 2px solid #F97316;
+}
+
+.podium-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #171717;
+  text-align: center;
+  max-width: 100px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.podium-score {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #171717;
+}
+
+.podium-item.first .podium-score {
+  font-size: 2rem;
+}
+
+.podium-bar {
+  width: 80px;
+  background: #171717;
+  border-radius: 4px 4px 0 0;
+  margin-top: 0.5rem;
+}
+
+.podium-item.first .podium-bar {
+  height: 80px;
+  width: 90px;
+}
+
+.podium-item.second .podium-bar {
+  height: 60px;
+}
+
+.podium-item.third .podium-bar {
+  height: 40px;
+}
+
+/* Ranking List */
+.ranking-list {
   background: #fff;
   border: 1px solid #E5E5E5;
   border-radius: 12px;
   overflow: hidden;
 }
 
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem 1.25rem;
-  border-bottom: 1px solid #E5E5E5;
-}
-
-.section-header h2 {
-  font-size: 1rem;
-  font-weight: 600;
-  margin: 0;
-}
-
-.btn-export {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  background: #fff;
-  border: 1px solid #E5E5E5;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 0.875rem;
-}
-
-.btn-export svg {
-  width: 16px;
-  height: 16px;
-}
-
-.table-container {
-  overflow-x: auto;
-}
-
-.athletes-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.athletes-table th {
-  text-align: left;
+.list-header {
+  display: grid;
+  grid-template-columns: 60px 1fr 80px 120px;
   padding: 0.75rem 1rem;
+  background: #FAFAFA;
+  border-bottom: 1px solid #E5E5E5;
   font-size: 0.75rem;
   font-weight: 600;
   color: #737373;
   text-transform: uppercase;
-  background: #FAFAFA;
-  border-bottom: 1px solid #E5E5E5;
 }
 
-.athletes-table td {
+.ranking-item {
+  display: grid;
+  grid-template-columns: 60px 1fr 80px 120px;
+  align-items: center;
   padding: 0.75rem 1rem;
   border-bottom: 1px solid #F5F5F5;
-  vertical-align: middle;
+  cursor: pointer;
+  transition: background 0.15s;
 }
 
-.rank-cell {
-  width: 60px;
+.ranking-item:hover {
+  background: #FAFAFA;
 }
 
-.rank {
-  display: inline-flex;
+.ranking-item:last-child {
+  border-bottom: none;
+}
+
+.ranking-item.top-three {
+  display: none;
+}
+
+.ranking-item.needs-attention {
+  background: #FEF2F2;
+}
+
+.ranking-item.needs-attention:hover {
+  background: #FEE2E2;
+}
+
+.rank-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  font-size: 0.875rem;
   font-weight: 600;
+  font-size: 0.875rem;
   background: #F5F5F5;
   color: #525252;
 }
 
-.rank.gold { background: #FEF3C7; color: #92400E; }
-.rank.silver { background: #E5E5E5; color: #404040; }
-.rank.bronze { background: #FED7AA; color: #9A3412; }
+.rank-badge.gold {
+  background: #FEF3C7;
+  color: #92400E;
+}
+
+.rank-badge.silver {
+  background: #F3F4F6;
+  color: #4B5563;
+}
+
+.rank-badge.bronze {
+  background: #FED7AA;
+  color: #9A3412;
+}
 
 .athlete-info {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
 }
 
-.athlete-info .name {
+.athlete-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.875rem;
+  flex-shrink: 0;
+}
+
+.athlete-avatar.excellent {
+  background: #D1FAE5;
+  color: #065F46;
+}
+
+.athlete-avatar.good {
+  background: #DBEAFE;
+  color: #1E40AF;
+}
+
+.athlete-avatar.average {
+  background: #FEF3C7;
+  color: #92400E;
+}
+
+.athlete-avatar.needs_improvement {
+  background: #FEE2E2;
+  color: #991B1B;
+}
+
+.athlete-details {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.athlete-name {
   font-weight: 500;
   color: #171717;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.athlete-info .email {
+.athlete-meta {
+  display: flex;
+  gap: 0.75rem;
   font-size: 0.75rem;
   color: #737373;
 }
 
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.meta-item svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* Score Circle */
+.score-display {
+  display: flex;
+  justify-content: center;
+}
+
+.score-circle {
+  position: relative;
+  width: 48px;
+  height: 48px;
+}
+
+.score-circle svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.score-bg {
+  fill: none;
+  stroke: #E5E5E5;
+  stroke-width: 3;
+}
+
+.score-fill {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.score-circle.excellent .score-fill { stroke: #059669; }
+.score-circle.good .score-fill { stroke: #2563EB; }
+.score-circle.average .score-fill { stroke: #D97706; }
+.score-circle.needs_improvement .score-fill { stroke: #DC2626; }
+
+.score-value {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #171717;
+}
+
+/* Tier Indicator */
+.tier-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
 .tier-badge {
-  display: inline-block;
   padding: 0.25rem 0.75rem;
   border-radius: 9999px;
   font-size: 0.75rem;
   font-weight: 500;
 }
 
-.tier-badge.excellent { background: #D1FAE5; color: #065F46; }
-.tier-badge.good { background: #DBEAFE; color: #1E40AF; }
-.tier-badge.average { background: #FEF3C7; color: #92400E; }
-.tier-badge.needs_improvement { background: #FEE2E2; color: #991B1B; }
-
-.score-cell {
-  min-width: 120px;
+.tier-badge.excellent {
+  background: #D1FAE5;
+  color: #065F46;
 }
 
-.score-bar {
-  height: 6px;
-  background: #E5E5E5;
-  border-radius: 3px;
-  overflow: hidden;
-  margin-bottom: 0.25rem;
+.tier-badge.good {
+  background: #DBEAFE;
+  color: #1E40AF;
 }
 
-.score-fill {
-  height: 100%;
-  background: #171717;
-  border-radius: 3px;
+.tier-badge.average {
+  background: #FEF3C7;
+  color: #92400E;
 }
 
-.score-value {
-  font-size: 0.875rem;
-  font-weight: 600;
+.tier-badge.needs_improvement {
+  background: #FEE2E2;
+  color: #991B1B;
 }
 
-.attendance-stats {
-  display: flex;
-  gap: 0.25rem;
-  margin-bottom: 0.25rem;
-}
-
-.attendance-stats .stat {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: 500;
-}
-
-.stat.on-time { background: #D1FAE5; color: #065F46; }
-.stat.late { background: #FEF3C7; color: #92400E; }
-.stat.leave { background: #DBEAFE; color: #1E40AF; }
-.stat.absent { background: #FEE2E2; color: #991B1B; }
-
-.rate {
-  font-size: 0.75rem;
-  color: #737373;
-}
-
-.training-info {
-  font-size: 0.875rem;
-}
-
-.training-info small {
-  color: #737373;
-}
-
-.rating-stars {
-  display: flex;
-  gap: 2px;
-}
-
-.star {
-  color: #E5E5E5;
-  font-size: 0.875rem;
-}
-
-.star.filled {
-  color: #F59E0B;
-}
-
-.rating-value {
-  font-size: 0.75rem;
-  color: #737373;
-  margin-left: 0.25rem;
-}
-
-.btn-detail {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: #F5F5F5;
-  color: #525252;
-}
-
-.btn-detail:hover {
-  background: #E5E5E5;
-}
-
-.btn-detail svg {
+.arrow-icon {
   width: 16px;
   height: 16px;
+  color: #A3A3A3;
 }
 
+/* Empty State */
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -726,25 +876,146 @@ onMounted(() => {
   opacity: 0.5;
 }
 
-@media (max-width: 768px) {
+/* Export */
+.export-section {
+  display: flex;
+  justify-content: center;
+  margin-top: 1.5rem;
+}
+
+.btn-export {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: #fff;
+  border: 1px solid #E5E5E5;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: #525252;
+}
+
+.btn-export:hover {
+  background: #F5F5F5;
+}
+
+.btn-export svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
   .evaluation-dashboard {
-    padding: 1rem;
+    padding: 0.75rem;
   }
 
-  .filters-section {
+  .page-header {
     flex-direction: column;
-    align-items: stretch;
+    align-items: flex-start;
   }
 
-  .summary-cards {
-    grid-template-columns: repeat(2, 1fr);
+  .header-actions {
+    width: 100%;
   }
 
-  .athletes-table th:nth-child(5),
-  .athletes-table td:nth-child(5),
-  .athletes-table th:nth-child(6),
-  .athletes-table td:nth-child(6) {
+  .btn-action {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .quick-stats {
+    padding: 0.5rem;
+  }
+
+  .stat-item {
+    padding: 0.5rem 0.75rem;
+    min-width: 50px;
+  }
+
+  .stat-count {
+    font-size: 1rem;
+  }
+
+  .podium {
+    gap: 0.25rem;
+  }
+
+  .podium-avatar {
+    width: 44px;
+    height: 44px;
+  }
+
+  .podium-item.first .podium-avatar {
+    width: 52px;
+    height: 52px;
+  }
+
+  .podium-item.second .podium-avatar,
+  .podium-item.third .podium-avatar {
+    width: 40px;
+    height: 40px;
+  }
+
+  .podium-bar {
+    width: 60px;
+  }
+
+  .podium-item.first .podium-bar {
+    width: 70px;
+    height: 60px;
+  }
+
+  .podium-item.second .podium-bar {
+    height: 45px;
+  }
+
+  .podium-item.third .podium-bar {
+    height: 30px;
+  }
+
+  .list-header {
     display: none;
+  }
+
+  .ranking-item {
+    grid-template-columns: 40px 1fr 60px 80px;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .rank-badge {
+    width: 28px;
+    height: 28px;
+    font-size: 0.75rem;
+  }
+
+  .athlete-avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 0.75rem;
+  }
+
+  .athlete-name {
+    font-size: 0.875rem;
+  }
+
+  .athlete-meta {
+    display: none;
+  }
+
+  .score-circle {
+    width: 40px;
+    height: 40px;
+  }
+
+  .score-value {
+    font-size: 0.75rem;
+  }
+
+  .tier-badge {
+    padding: 0.2rem 0.5rem;
+    font-size: 0.65rem;
   }
 }
 </style>
