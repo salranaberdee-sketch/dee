@@ -67,8 +67,8 @@
 
     <!-- Ranking Grid -->
     <div v-else class="ranking-section">
-      <!-- Top 3 Podium -->
-      <div v-if="filteredAthletes.length >= 3 && !filterTier" class="podium">
+      <!-- Top 3 Podium (แสดงเมื่อมีมากกว่า 3 คน) -->
+      <div v-if="showPodium" class="podium">
         <div class="podium-item second" @click="goToDetail(filteredAthletes[1])">
           <div class="podium-rank">2</div>
           <div class="podium-avatar">
@@ -117,7 +117,7 @@
           :key="athlete.athlete_id"
           class="ranking-item"
           :class="{ 
-            'top-three': getRealRank(index) <= 3 && !filterTier,
+            'top-three': getRealRank(index) <= 3 && showPodium,
             'needs-attention': athlete.performance_tier === 'needs_improvement'
           }"
           @click="goToDetail(athlete)"
@@ -234,20 +234,27 @@ const filteredAthletes = computed(() => {
   return evaluationStore.athleteStats.filter(a => a.performance_tier === filterTier.value)
 })
 
-// แสดงรายการ (ข้าม 3 อันดับแรกถ้าไม่ได้กรอง)
+// แสดงรายการ (ข้าม 3 อันดับแรกถ้าแสดง Podium)
+const showPodium = computed(() => {
+  return filteredAthletes.value.length > 3 && !filterTier.value
+})
+
 const displayAthletes = computed(() => {
-  if (filterTier.value || filteredAthletes.value.length < 3) {
-    return filteredAthletes.value
+  // ถ้าแสดง Podium → ข้าม 3 อันดับแรก
+  if (showPodium.value) {
+    return filteredAthletes.value.slice(3)
   }
-  return filteredAthletes.value.slice(3)
+  // ไม่แสดง Podium → แสดงทั้งหมด
+  return filteredAthletes.value
 })
 
 // คำนวณอันดับจริง
 function getRealRank(index) {
-  if (filterTier.value || filteredAthletes.value.length < 3) {
-    return index + 1
+  // ถ้าแสดง Podium → อันดับเริ่มจาก 4
+  if (showPodium.value) {
+    return index + 4
   }
-  return index + 4
+  return index + 1
 }
 
 // สลับ filter

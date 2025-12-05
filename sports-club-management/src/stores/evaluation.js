@@ -198,14 +198,11 @@ export const useEvaluationStore = defineStore('evaluation', () => {
   }
 
   /**
-   * Calculate athlete statistics using configurable scoring criteria
-   * Requirements: 4.1, 4.2, 4.3, 4.4, 4.9
+   * คำนวณสถิตินักกีฬาด้วย Batch Query (Performance Optimized)
+   * แก้ไข N+1 Query Problem - ดึงข้อมูลทั้งหมดในครั้งเดียว
    * 
-   * ระบบจะพยายามใช้ Flexible Scoring System (club_scoring_configs) ก่อน
-   * ถ้าไม่มีจะ fallback ไปใช้ระบบเดิม (scoring_criteria)
-   * 
-   * @param {string} clubId - The club ID to calculate stats for
-   * @param {string} month - The month in YYYY-MM format
+   * @param {string} clubId - รหัสชมรม
+   * @param {string} month - เดือนในรูปแบบ YYYY-MM
    */
   async function calculateAthleteStats(clubId, month) {
     loading.value = true
@@ -217,28 +214,26 @@ export const useEvaluationStore = defineStore('evaluation', () => {
       monthEnd.setDate(0)
       const endDate = monthEnd.toISOString().slice(0, 10)
 
-      // พยายามใช้ Flexible Scoring System ก่อน (Requirements 1.1, 6.1)
+      // ดึง scoring config (Flexible Scoring System)
       const scoringConfigStore = useScoringConfigStore()
       await scoringConfigStore.fetchClubConfig(clubId)
-      
       const hasFlexibleConfig = scoringConfigStore.clubConfig?.is_active
-      
-      // ถ้าไม่มี flexible config ให้ใช้ระบบเดิม (backward compatibility)
+
+      // ดึง scoring criteria แบบเดิม (ถ้าไม่มี flexible config)
       let criteria = null
       let conditions = []
-      
       if (!hasFlexibleConfig) {
-        // Fetch scoring criteria and conditions for the club (Requirements 4.1, 4.2, 4.3)
         const scoringCriteriaStore = useScoringCriteriaStore()
         await scoringCriteriaStore.fetchCriteria(clubId)
         await scoringCriteriaStore.fetchConditions(clubId)
-        
         criteria = scoringCriteriaStore.getEffectiveCriteria()
         conditions = scoringCriteriaStore.activeConditions
       }
 
-      // ดึงข้อมูลนักกีฬาในชมรม
-      let athleteQuery = supabase.from('athletes').select('*')
+      // ===== BATCH QUERIES - ดึงข้อมูลทั้งหมดในครั้งเดียว =====
+      
+      // 1. ดึงนักกีฬาทั้งหมด
+      let athleteQuery = supabase.from('athletes').select('id, name, email, club_id')
       if (clubId) athleteQuery = athleteQuery.eq('club_id', clubId)
       const { data: athletes } = await athleteQuery
 
@@ -247,41 +242,87 @@ export const useEvaluationStore = defineStore('evaluation', () => {
         return
       }
 
-      const stats = []
-      for (const athlete of athletes) {
-        // ดึง attendance records
-        const { data: attendance } = await supabase
-          .from('attendance_records')
-          .select('status')
-          .eq('athlete_id', athlete.id)
-          .gte('record_date', monthStart)
-          .lte('record_date', endDate)
+      const athleteIds = athletes.map(a => a.id)
 
-        // ดึง training logs
-        const { data: training } = await supabase
-          .from('training_logs')
-          .select('duration, rating')
-          .eq('athlete_id', athlete.id)
-          .gte('date', monthStart)
-          .lte('date', endDate)
+      // 2. ดึง attendance records ทั้งหมดในครั้งเดียว
+      let attendanceQuery = supabase
+        .from('attendance_records')
+        .select('athlete_id, status')
+        .in('athlete_id', athleteIds)
+        .gte('record_date', monthStart)
+        .lte('record_date', endDate)
+      
+      // 3. ดึง training logs ทั้งหมดในครั้งเดียว
+      let trainingQuery = supabase
+        .from('training_logs')
+        .select('athlete_id, duration, rating')
+        .in('athlete_id', athleteIds)
+        .gte('date', monthStart)
+        .lte('date', endDate)
+
+      // รัน queries พร้อมกัน (Parallel)
+      const [attendanceResult, trainingResult] = await Promise.all([
+        attendanceQuery,
+        trainingQuery
+      ])
+
+      const allAttendance = attendanceResult.data || []
+      const allTraining = trainingResult.data || []
+
+      // ===== จัดกลุ่มข้อมูลตาม athlete_id (O(n)) =====
+      const attendanceByAthlete = {}
+      const trainingByAthlete = {}
+
+      for (const record of allAttendance) {
+        if (!attendanceByAthlete[record.athlete_id]) {
+          attendanceByAthlete[record.athlete_id] = []
+        }
+        attendanceByAthlete[record.athlete_id].push(record)
+      }
+
+      for (const log of allTraining) {
+        if (!trainingByAthlete[log.athlete_id]) {
+          trainingByAthlete[log.athlete_id] = []
+        }
+        trainingByAthlete[log.athlete_id].push(log)
+      }
+
+      // เตรียม Flexible Scoring data (ถ้ามี)
+      let flexibleCategories, flexibleMetrics, metricsByCategory, tierThresholds
+      if (hasFlexibleConfig) {
+        flexibleCategories = scoringConfigStore.activeCategories
+        flexibleMetrics = scoringConfigStore.metrics
+        metricsByCategory = {}
+        for (const metric of flexibleMetrics) {
+          if (!metricsByCategory[metric.category_id]) {
+            metricsByCategory[metric.category_id] = []
+          }
+          metricsByCategory[metric.category_id].push(metric)
+        }
+        tierThresholds = createTierThresholdsFromConfig(scoringConfigStore.clubConfig)
+      }
+
+      // ===== คำนวณสถิติแต่ละนักกีฬา (ไม่มี query เพิ่ม) =====
+      const stats = athletes.map(athlete => {
+        const attendance = attendanceByAthlete[athlete.id] || []
+        const training = trainingByAthlete[athlete.id] || []
 
         // คำนวณสถิติพื้นฐาน
-        const totalSessions = attendance?.length || 0
-        const onTime = attendance?.filter(a => a.status === 'on_time').length || 0
-        const late = attendance?.filter(a => a.status === 'late').length || 0
-        const leave = attendance?.filter(a => a.status === 'leave').length || 0
-        const absent = attendance?.filter(a => a.status === 'absent').length || 0
-        
+        const totalSessions = attendance.length
+        const onTime = attendance.filter(a => a.status === 'on_time').length
+        const late = attendance.filter(a => a.status === 'late').length
+        const leave = attendance.filter(a => a.status === 'leave').length
+        const absent = attendance.filter(a => a.status === 'absent').length
         const attended = onTime + late
         const attendanceRate = totalSessions > 0 ? (attended / totalSessions) * 100 : 0
 
-        const trainingHours = training?.reduce((sum, t) => sum + (t.duration || 0), 0) / 60 || 0
-        const trainingSessions = training?.length || 0
-        const avgRating = training?.length > 0 
+        const trainingHours = training.reduce((sum, t) => sum + (t.duration || 0), 0) / 60
+        const trainingSessions = training.length
+        const avgRating = training.length > 0 
           ? training.reduce((sum, t) => sum + (t.rating || 0), 0) / training.length 
           : 0
 
-        // Prepare athlete stats for score calculation
+        // เตรียมข้อมูลสำหรับคำนวณคะแนน
         const athleteStatsData = {
           total_sessions: totalSessions,
           attended_on_time: onTime,
@@ -297,23 +338,9 @@ export const useEvaluationStore = defineStore('evaluation', () => {
         let scoreBreakdown
 
         if (hasFlexibleConfig) {
-          // ใช้ Flexible Scoring System (Requirements 6.1, 6.2, 6.3, 6.4)
-          const flexibleCategories = scoringConfigStore.activeCategories
-          const flexibleMetrics = scoringConfigStore.metrics
-          
-          // จัดกลุ่ม metrics ตาม category
-          const metricsByCategory = {}
-          for (const metric of flexibleMetrics) {
-            if (!metricsByCategory[metric.category_id]) {
-              metricsByCategory[metric.category_id] = []
-            }
-            metricsByCategory[metric.category_id].push(metric)
-          }
-
-          // สร้าง metric values จากข้อมูลนักกีฬา
+          // คำนวณด้วย Flexible Scoring System
           const metricValues = {}
           for (const metric of flexibleMetrics) {
-            // Map metric name to athlete data
             switch (metric.name) {
               case 'attendance_rate':
                 metricValues[metric.id] = attendanceRate
@@ -329,15 +356,10 @@ export const useEvaluationStore = defineStore('evaluation', () => {
                 metricValues[metric.id] = trainingSessions
                 break
               default:
-                // ใช้ default value สำหรับ metrics อื่นๆ
                 metricValues[metric.id] = metric.default_value || 0
             }
           }
 
-          // สร้าง tier thresholds จาก config
-          const tierThresholds = createTierThresholdsFromConfig(scoringConfigStore.clubConfig)
-
-          // คำนวณคะแนนด้วย Flexible Scoring System
           const flexibleResult = calculateOverallScore({
             categories: flexibleCategories,
             metricsByCategory,
@@ -361,12 +383,11 @@ export const useEvaluationStore = defineStore('evaluation', () => {
             calculation_details: flexibleResult.calculation_details
           }
         } else {
-          // ใช้ระบบเดิม (backward compatibility)
-          // Calculate score using scoreCalculator with criteria and conditions (Requirement 4.4, 4.9)
+          // คำนวณด้วยระบบเดิม
           scoreBreakdown = calculateScore(athleteStatsData, criteria, conditions)
         }
 
-        stats.push({
+        return {
           athlete_id: athlete.id,
           athlete_name: athlete.name,
           athlete_email: athlete.email,
@@ -380,7 +401,6 @@ export const useEvaluationStore = defineStore('evaluation', () => {
           training_hours: Math.round(trainingHours * 100) / 100,
           training_sessions: trainingSessions,
           average_rating: Math.round(avgRating * 100) / 100,
-          // Score breakdown from calculator
           attendance_score: scoreBreakdown.attendance_score,
           training_score: scoreBreakdown.training_score,
           rating_score: scoreBreakdown.rating_score,
@@ -391,11 +411,10 @@ export const useEvaluationStore = defineStore('evaluation', () => {
           performance_tier: scoreBreakdown.tier,
           applied_conditions: scoreBreakdown.applied_conditions,
           criteria_used: scoreBreakdown.criteria_used,
-          // เพิ่มข้อมูลจาก Flexible Scoring System
           category_scores: scoreBreakdown.category_scores,
           calculation_details: scoreBreakdown.calculation_details
-        })
-      }
+        }
+      })
 
       athleteStats.value = stats.sort((a, b) => b.overall_score - a.overall_score)
     } catch (err) {
