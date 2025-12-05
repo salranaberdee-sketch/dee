@@ -4,11 +4,9 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useDataStore } from '@/stores/data'
 import { supabase } from '@/lib/supabase'
-import AthleteHistory from '@/components/AthleteHistory.vue'
 import AlbumSection from '@/components/AlbumSection.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
 import ProfilePictureModal from '@/components/ProfilePictureModal.vue'
-import MyProgressSection from '@/components/MyProgressSection.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -405,17 +403,7 @@ function getCoachName(id) {
   return data.getCoachById(id)?.name || '—'
 }
 
-// Menu items
-const menuItems = [
-  { icon: 'bell', label: 'ตั้งค่าการแจ้งเตือน', to: '/notification-settings', roles: ['admin', 'coach', 'athlete'] },
-  { icon: 'building', label: 'จัดการชมรม', to: '/clubs', roles: ['admin'] },
-  { icon: 'file-text', label: 'ใบสมัครชมรม', to: '/club-applications', roles: ['admin', 'coach'] },
-  { icon: 'file-check', label: 'ใบสมัครของฉัน', to: '/my-applications', roles: ['athlete'] },
-  { icon: 'clipboard', label: 'บันทึกฝึกซ้อม', to: '/training-logs', roles: ['admin', 'coach', 'athlete'] },
-  { icon: 'database', label: 'สำรองข้อมูล', to: '/backup', roles: ['admin'] },
-]
 
-const filteredMenu = computed(() => menuItems.filter(item => item.roles.includes(auth.profile?.role)))
 
 // Profile Picture Modal state (Requirements 1.1, 7.1, 7.2)
 const showProfilePictureModal = ref(false)
@@ -542,37 +530,41 @@ function handleAvatarUpdated(newAvatarUrl) {
           </div>
         </div>
 
-        <!-- Documents Section (Athletes only) -->
-        <div v-if="auth.isAthlete && myAthlete" class="section">
+        <!-- Quick Actions Section -->
+        <div class="section">
           <div class="section-header">
             <div class="section-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-                <polyline points="14 2 14 8 20 8"/>
+                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
               </svg>
             </div>
-            <span class="section-title">เอกสาร ({{ uploadedDocsCount }}/5)</span>
+            <span class="section-title">การกระทำด่วน</span>
           </div>
-          <div class="doc-view-list">
-            <div v-for="doc in docList" :key="doc.key" class="doc-view-item">
-              <div class="doc-view-info">
-                <span class="doc-view-label">{{ doc.label }}</span>
-                <span v-if="doc.required" class="doc-required">จำเป็น</span>
-              </div>
-              <div v-if="getExistingDoc(doc.key)" class="doc-view-status uploaded">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+          <div class="menu-list">
+            <router-link to="/notification-settings" class="menu-row">
+              <span class="menu-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
                 </svg>
-                <span>อัปโหลดแล้ว</span>
-                <span v-if="getExistingDoc(doc.key)?.verified" class="verified-badge">ตรวจสอบแล้ว</span>
-              </div>
-              <div v-else class="doc-view-status pending">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </span>
+              <span class="menu-label">ตั้งค่าการแจ้งเตือน</span>
+              <svg class="menu-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </router-link>
+            <router-link to="/training-logs" class="menu-row">
+              <span class="menu-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/>
+                  <rect x="8" y="2" width="8" height="4" rx="1"/>
                 </svg>
-                <span>ยังไม่ได้อัปโหลด</span>
-              </div>
-            </div>
+              </span>
+              <span class="menu-label">บันทึกฝึกซ้อม</span>
+              <svg class="menu-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </router-link>
           </div>
         </div>
 
@@ -583,40 +575,6 @@ function handleAvatarUpdated(newAvatarUrl) {
           :read-only="false"
           class="section"
         />
-
-        <!-- My Progress Section (Athletes only) -->
-        <MyProgressSection v-if="auth.isAthlete" class="section" />
-
-        <!-- Menu Section -->
-        <div v-if="filteredMenu.length" class="section">
-          <div class="section-header">
-            <div class="section-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>
-              </svg>
-            </div>
-            <span class="section-title">เมนู</span>
-          </div>
-          <div class="menu-list">
-            <router-link v-for="item in filteredMenu" :key="item.to" :to="item.to" class="menu-row">
-              <span class="menu-icon">
-                <svg v-if="item.icon === 'bell'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-                <svg v-else-if="item.icon === 'building'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5"/></svg>
-                <svg v-else-if="item.icon === 'file-text'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-                <svg v-else-if="item.icon === 'file-check'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15l2 2 4-4"/></svg>
-                <svg v-else-if="item.icon === 'clipboard'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
-                <svg v-else-if="item.icon === 'database'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
-              </span>
-              <span class="menu-label">{{ item.label }}</span>
-              <svg class="menu-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-            </router-link>
-          </div>
-        </div>
-
-        <!-- Athlete History -->
-        <div v-if="myAthlete?.id" class="section">
-          <AthleteHistory :athlete-id="myAthlete.id" />
-        </div>
 
         <!-- Logout Button -->
         <button class="logout-btn" @click="logout">

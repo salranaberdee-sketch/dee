@@ -4,13 +4,28 @@ import { useDataStore } from '@/stores/data'
 import { useAuthStore } from '@/stores/auth'
 import Modal from '@/components/Modal.vue'
 import QRCodeDisplay from '@/components/QRCodeDisplay.vue'
+import QRScanner from '@/components/QRScanner.vue'
 
 const data = useDataStore()
 const auth = useAuthStore()
 
+// Constants
+const MAX_CALENDAR_EVENTS_DISPLAY = 3
+const MAX_PAST_EVENTS_DISPLAY = 10
+const MAX_TODAY_EVENTS_PREVIEW = 3
+const DEFAULT_CHECKIN_START_MINUTES = 30
+const DEFAULT_CHECKIN_LATE_MINUTES = 15
+const MAX_CHECKIN_DURATION_HOURS = 2
+const MILLISECONDS_PER_MINUTE = 60000
+const MINUTES_PER_HOUR = 60
+const CALENDAR_GRID_SIZE = 42
+const TIME_FORMAT_LENGTH = 5
+
 // View mode
 const viewMode = ref('list') // 'list' | 'calendar'
 const currentMonth = ref(new Date())
+const loading = ref(false)
+const error = ref(null)
 
 // Filters
 const searchQuery = ref('')
@@ -218,7 +233,7 @@ const calendarDays = computed(() => {
   }
   
   // Next month padding
-  const remaining = 42 - days.length
+  const remaining = CALENDAR_GRID_SIZE - days.length
   for (let i = 1; i <= remaining; i++) {
     const d = new Date(year, month + 1, i)
     days.push({ date: d, isCurrentMonth: false, events: [] })
@@ -243,10 +258,20 @@ function goToToday() {
   currentMonth.value = new Date()
 }
 
-onMounted(() => {
-  data.fetchEvents()
-  data.fetchClubs()
-  data.fetchAthletes()
+onMounted(async () => {
+  try {
+    loading.value = true
+    await Promise.all([
+      data.fetchEvents(),
+      data.fetchClubs(),
+      data.fetchAthletes()
+    ])
+  } catch (err) {
+    console.error('เกิดข้อผิดพลาดในการโหลดข้อมูล:', err)
+    error.value = 'ไม่สามารถโหลดข้อมูลได้ กรุณารีเฟรชหน้าเว็บ'
+  } finally {
+    loading.value = false
+  }
 })
 
 function clearFilters() {
@@ -277,116 +302,176 @@ function openForm(event = null) {
 }
 
 async function saveEvent() {
-  const checkinStart = form.value.enable_checkin_settings && form.value.checkin_start_minutes !== '' && form.value.checkin_start_minutes !== null
-    ? Number(form.value.checkin_start_minutes) 
-    : 30
-  const checkinLate = form.value.enable_checkin_settings && form.value.checkin_late_minutes !== '' && form.value.checkin_late_minutes !== null
-    ? Number(form.value.checkin_late_minutes) 
-    : 15
+  try {
+    loading.value = true
+    const checkinStart = form.value.enable_checkin_settings && form.value.checkin_start_minutes !== '' && form.value.checkin_start_minutes !== null
+      ? Number(form.value.checkin_start_minutes) 
+      : DEFAULT_CHECKIN_START_MINUTES
+    const checkinLate = form.value.enable_checkin_settings && form.value.checkin_late_minutes !== '' && form.value.checkin_late_minutes !== null
+      ? Number(form.value.checkin_late_minutes) 
+      : DEFAULT_CHECKIN_LATE_MINUTES
 
-  const payload = {
-    title: form.value.title,
-    description: form.value.description || null,
-    event_type: form.value.event_type,
-    event_date: form.value.event_date,
-    start_time: form.value.start_time,
-    end_time: form.value.end_time || null,
-    location: form.value.location,
-    requires_registration: form.value.requires_registration || false,
-    registration_deadline: form.value.registration_deadline || null,
-    max_participants: form.value.max_participants ? Number(form.value.max_participants) : null,
-    checkin_start_minutes: checkinStart,
-    checkin_late_minutes: checkinLate,
-    club_id: form.value.club_id || null,
-    created_by: auth.user?.id || null
-  }
-  
-  let result
-  if (editingEvent.value && editingEvent.value.id) {
-    result = await data.updateEvent(editingEvent.value.id, payload)
-  } else {
-    result = await data.addEvent(payload)
-  }
-  
-  if (result.success) {
-    showForm.value = false
-  } else {
-    alert(result.message)
+    const payload = {
+      title: form.value.title,
+      description: form.value.description || null,
+      event_type: form.value.event_type,
+      event_date: form.value.event_date,
+      start_time: form.value.start_time,
+      end_time: form.value.end_time || null,
+      location: form.value.location,
+      requires_registration: form.value.requires_registration || false,
+      registration_deadline: form.value.registration_deadline || null,
+      max_participants: form.value.max_participants ? Number(form.value.max_participants) : null,
+      checkin_start_minutes: checkinStart,
+      checkin_late_minutes: checkinLate,
+      club_id: form.value.club_id || null,
+      created_by: auth.user?.id || null
+    }
+    
+    let result
+    if (editingEvent.value && editingEvent.value.id) {
+      result = await data.updateEvent(editingEvent.value.id, payload)
+    } else {
+      result = await data.addEvent(payload)
+    }
+    
+    if (result.success) {
+      showForm.value = false
+    } else {
+      alert(result.message || 'ไม่สามารถบันทึกกิจกรรมได้')
+    }
+  } catch (err) {
+    console.error('เกิดข้อผิดพลาดในการบันทึกกิจกรรม:', err)
+    alert('เกิดข้อผิดพลาดในการบันทึกกิจกรรม กรุณาลองใหม่อีกครั้ง')
+  } finally {
+    loading.value = false
   }
 }
 
 async function deleteEvent(event) {
-  if (!confirm(`ลบกิจกรรม "${event.title}"?`)) return
-  await data.deleteEvent(event.id)
+  try {
+    if (!confirm(`ลบกิจกรรม "${event.title}"?`)) return
+    
+    loading.value = true
+    const result = await data.deleteEvent(event.id)
+    
+    if (!result.success) {
+      alert(result.message || 'ไม่สามารถลบกิจกรรมได้')
+    }
+  } catch (err) {
+    console.error('เกิดข้อผิดพลาดในการลบกิจกรรม:', err)
+    alert('เกิดข้อผิดพลาดในการลบกิจกรรม กรุณาลองใหม่อีกครั้ง')
+  } finally {
+    loading.value = false
+  }
 }
 
 async function updateEventStatus(event, newStatus) {
-  const result = await data.updateEvent(event.id, { ...event, status: newStatus })
-  if (result.success) {
-    // Refresh selectedEvent from store to get updated data
-    await data.fetchEvents()
-    const updated = data.events.find(e => e.id === event.id)
-    if (updated) {
-      selectedEvent.value = updated
+  try {
+    loading.value = true
+    const result = await data.updateEvent(event.id, { ...event, status: newStatus })
+    
+    if (result.success) {
+      // Refresh selectedEvent from store to get updated data
+      await data.fetchEvents()
+      const updated = data.events.find(e => e.id === event.id)
+      if (updated) {
+        selectedEvent.value = updated
+      }
+    } else {
+      alert(result.message || 'ไม่สามารถเปลี่ยนสถานะได้')
     }
-  } else {
-    alert(result.message || 'ไม่สามารถเปลี่ยนสถานะได้')
+  } catch (err) {
+    console.error('เกิดข้อผิดพลาดในการเปลี่ยนสถานะ:', err)
+    alert('เกิดข้อผิดพลาดในการเปลี่ยนสถานะ กรุณาลองใหม่อีกครั้ง')
+  } finally {
+    loading.value = false
   }
 }
 
 async function openDetail(event) {
-  selectedEvent.value = event
-  showDetail.value = true
-  
-  registrations.value = await data.getEventRegistrations(event.id)
-  checkins.value = await data.getEventCheckins(event.id)
-  
-  if (isAthlete.value) {
-    const athleteRecord = data.athletes.find(a => a.user_id === auth.user?.id)
-    if (athleteRecord) {
-      myRegistration.value = await data.getMyRegistration(event.id, athleteRecord.id)
-      myCheckin.value = await data.getMyCheckin(event.id, athleteRecord.id)
+  try {
+    loading.value = true
+    error.value = null
+    selectedEvent.value = event
+    showDetail.value = true
+    
+    registrations.value = await data.getEventRegistrations(event.id)
+    checkins.value = await data.getEventCheckins(event.id)
+    
+    if (isAthlete.value) {
+      const athleteRecord = data.athletes.find(a => a.user_id === auth.user?.id)
+      if (athleteRecord) {
+        myRegistration.value = await data.getMyRegistration(event.id, athleteRecord.id)
+        myCheckin.value = await data.getMyCheckin(event.id, athleteRecord.id)
+      }
     }
+  } catch (err) {
+    console.error('เกิดข้อผิดพลาดในการโหลดรายละเอียดกิจกรรม:', err)
+    error.value = 'ไม่สามารถโหลดรายละเอียดกิจกรรมได้'
+    alert('ไม่สามารถโหลดรายละเอียดกิจกรรมได้ กรุณาลองใหม่อีกครั้ง')
+  } finally {
+    loading.value = false
   }
 }
 
 async function register() {
-  const athleteRecord = data.athletes.find(a => a.user_id === auth.user?.id)
-  if (!athleteRecord) {
-    alert('ไม่พบข้อมูลนักกีฬา')
-    return
-  }
-  
-  if (selectedEvent.value.registration_deadline) {
-    const deadline = new Date(selectedEvent.value.registration_deadline)
-    if (new Date() > deadline) {
-      alert('หมดเวลาลงทะเบียนแล้ว')
+  try {
+    loading.value = true
+    const athleteRecord = data.athletes.find(a => a.user_id === auth.user?.id)
+    if (!athleteRecord) {
+      alert('ไม่พบข้อมูลนักกีฬา')
       return
     }
-  }
-  
-  if (selectedEvent.value.max_participants && registrations.value.length >= selectedEvent.value.max_participants) {
-    alert('จำนวนผู้เข้าร่วมเต็มแล้ว')
-    return
-  }
-  
-  const result = await data.registerForEvent(selectedEvent.value.id, athleteRecord.id)
-  if (result.success) {
-    myRegistration.value = result.data
-    registrations.value = await data.getEventRegistrations(selectedEvent.value.id)
-  } else {
-    alert(result.message)
+    
+    if (selectedEvent.value.registration_deadline) {
+      const deadline = new Date(selectedEvent.value.registration_deadline)
+      if (new Date() > deadline) {
+        alert('หมดเวลาลงทะเบียนแล้ว')
+        return
+      }
+    }
+    
+    if (selectedEvent.value.max_participants && registrations.value.length >= selectedEvent.value.max_participants) {
+      alert('จำนวนผู้เข้าร่วมเต็มแล้ว')
+      return
+    }
+    
+    const result = await data.registerForEvent(selectedEvent.value.id, athleteRecord.id)
+    if (result.success) {
+      myRegistration.value = result.data
+      registrations.value = await data.getEventRegistrations(selectedEvent.value.id)
+    } else {
+      alert(result.message || 'ไม่สามารถลงทะเบียนได้')
+    }
+  } catch (err) {
+    console.error('เกิดข้อผิดพลาดในการลงทะเบียน:', err)
+    alert('เกิดข้อผิดพลาดในการลงทะเบียน กรุณาลองใหม่อีกครั้ง')
+  } finally {
+    loading.value = false
   }
 }
 
 async function cancelReg() {
-  const athleteRecord = data.athletes.find(a => a.user_id === auth.user?.id)
-  if (!athleteRecord) return
-  
-  const result = await data.cancelRegistration(selectedEvent.value.id, athleteRecord.id)
-  if (result.success) {
-    myRegistration.value = null
-    registrations.value = await data.getEventRegistrations(selectedEvent.value.id)
+  try {
+    if (!confirm('ยกเลิกการลงทะเบียนกิจกรรมนี้?')) return
+    
+    loading.value = true
+    const athleteRecord = data.athletes.find(a => a.user_id === auth.user?.id)
+    if (!athleteRecord) return
+    
+    const result = await data.cancelRegistration(selectedEvent.value.id, athleteRecord.id)
+    if (result.success) {
+      myRegistration.value = null
+      registrations.value = await data.getEventRegistrations(selectedEvent.value.id)
+    } else {
+      alert(result.message || 'ไม่สามารถยกเลิกการลงทะเบียนได้')
+    }
+  } catch (err) {
+    console.error('เกิดข้อผิดพลาดในการยกเลิกการลงทะเบียน:', err)
+    alert('เกิดข้อผิดพลาดในการยกเลิกการลงทะเบียน กรุณาลองใหม่อีกครั้ง')
+  } finally {
+    loading.value = false
   }
 }
 
@@ -395,88 +480,112 @@ function openQRScanner() {
   scanResult.value = ''
 }
 
-async function submitCheckinCode() {
-  if (!scanResult.value.trim()) {
-    alert('กรุณากรอกรหัสเช็คอิน')
-    return
-  }
-  
-  const event = await data.getEventByCheckinCode(scanResult.value.trim())
-  if (!event) {
-    alert('ไม่พบกิจกรรมจากรหัสนี้')
-    return
-  }
-  
-  const athleteRecord = data.athletes.find(a => a.user_id === auth.user?.id)
-  if (!athleteRecord) {
-    alert('ไม่พบข้อมูลนักกีฬา')
-    return
-  }
-  
-  if (event.requires_registration) {
-    const reg = await data.getMyRegistration(event.id, athleteRecord.id)
-    if (!reg) {
-      alert('คุณยังไม่ได้ลงทะเบียนกิจกรรมนี้')
+async function handleQRScanResult(code) {
+  try {
+    if (!code || !code.trim()) {
+      alert('กรุณากรอกรหัสเช็คอิน')
       return
     }
-  }
-  
-  const result = await data.checkinEvent(event.id, athleteRecord.id, 'qr')
-  if (result.success) {
-    const statusText = result.status === 'on_time' ? 'ตรงเวลา' : result.status === 'late' ? 'สาย' : 'ขาด'
-    alert(`เช็คอินสำเร็จ! สถานะ: ${statusText}\nกิจกรรม: ${event.title}`)
-    showQRScanner.value = false
-    scanResult.value = ''
-    await data.fetchEvents()
-  } else {
-    alert(result.message)
+    
+    loading.value = true
+    const event = await data.getEventByCheckinCode(code.trim())
+    if (!event) {
+      alert('ไม่พบกิจกรรมจากรหัสนี้')
+      return
+    }
+    
+    const athleteRecord = data.athletes.find(a => a.user_id === auth.user?.id)
+    if (!athleteRecord) {
+      alert('ไม่พบข้อมูลนักกีฬา')
+      return
+    }
+    
+    if (event.requires_registration) {
+      const reg = await data.getMyRegistration(event.id, athleteRecord.id)
+      if (!reg) {
+        alert('คุณยังไม่ได้ลงทะเบียนกิจกรรมนี้')
+        return
+      }
+    }
+    
+    const result = await data.checkinEvent(event.id, athleteRecord.id, 'qr')
+    if (result.success) {
+      const statusText = result.status === 'on_time' ? 'ตรงเวลา' : result.status === 'late' ? 'สาย' : 'ขาด'
+      alert(`เช็คอินสำเร็จ! สถานะ: ${statusText}\nกิจกรรม: ${event.title}`)
+      showQRScanner.value = false
+      scanResult.value = ''
+      await data.fetchEvents()
+    } else {
+      alert(result.message || 'ไม่สามารถเช็คอินได้')
+    }
+  } catch (err) {
+    console.error('เกิดข้อผิดพลาดในการเช็คอิน:', err)
+    alert('เกิดข้อผิดพลาดในการเช็คอิน กรุณาลองใหม่อีกครั้ง')
+  } finally {
+    loading.value = false
   }
 }
 
 async function handleQRScan() {
-  const code = prompt('กรอกรหัสเช็คอิน (จาก QR Code):')
-  if (!code) return
-  
-  const event = await data.getEventByCheckinCode(code)
-  if (!event) {
-    alert('ไม่พบกิจกรรมจากรหัสนี้')
-    return
-  }
-  
-  const athleteRecord = data.athletes.find(a => a.user_id === auth.user?.id)
-  if (!athleteRecord) {
-    alert('ไม่พบข้อมูลนักกีฬา')
-    return
-  }
-  
-  if (event.requires_registration) {
-    const reg = await data.getMyRegistration(event.id, athleteRecord.id)
-    if (!reg) {
-      alert('คุณยังไม่ได้ลงทะเบียนกิจกรรมนี้')
+  try {
+    const code = prompt('กรอกรหัสเช็คอิน (จาก QR Code):')
+    if (!code) return
+    
+    loading.value = true
+    const event = await data.getEventByCheckinCode(code)
+    if (!event) {
+      alert('ไม่พบกิจกรรมจากรหัสนี้')
       return
     }
-  }
-  
-  const result = await data.checkinEvent(event.id, athleteRecord.id, 'qr')
-  if (result.success) {
-    const statusText = result.status === 'on_time' ? 'ตรงเวลา' : result.status === 'late' ? 'สาย' : 'ขาด'
-    alert(`เช็คอินสำเร็จ! สถานะ: ${statusText}`)
-    showQRScanner.value = false
-    if (selectedEvent.value?.id === event.id) {
-      checkins.value = await data.getEventCheckins(event.id)
-      myCheckin.value = await data.getMyCheckin(event.id, athleteRecord.id)
+    
+    const athleteRecord = data.athletes.find(a => a.user_id === auth.user?.id)
+    if (!athleteRecord) {
+      alert('ไม่พบข้อมูลนักกีฬา')
+      return
     }
-  } else {
-    alert(result.message)
+    
+    if (event.requires_registration) {
+      const reg = await data.getMyRegistration(event.id, athleteRecord.id)
+      if (!reg) {
+        alert('คุณยังไม่ได้ลงทะเบียนกิจกรรมนี้')
+        return
+      }
+    }
+    
+    const result = await data.checkinEvent(event.id, athleteRecord.id, 'qr')
+    if (result.success) {
+      const statusText = result.status === 'on_time' ? 'ตรงเวลา' : result.status === 'late' ? 'สาย' : 'ขาด'
+      alert(`เช็คอินสำเร็จ! สถานะ: ${statusText}`)
+      showQRScanner.value = false
+      if (selectedEvent.value?.id === event.id) {
+        checkins.value = await data.getEventCheckins(event.id)
+        myCheckin.value = await data.getMyCheckin(event.id, athleteRecord.id)
+      }
+    } else {
+      alert(result.message || 'ไม่สามารถเช็คอินได้')
+    }
+  } catch (err) {
+    console.error('เกิดข้อผิดพลาดในการเช็คอิน:', err)
+    alert('เกิดข้อผิดพลาดในการเช็คอิน กรุณาลองใหม่อีกครั้ง')
+  } finally {
+    loading.value = false
   }
 }
 
 async function manualCheckinAthlete(athleteId, status) {
-  const result = await data.manualCheckin(selectedEvent.value.id, athleteId, status)
-  if (result.success) {
-    checkins.value = await data.getEventCheckins(selectedEvent.value.id)
-  } else {
-    alert(result.message)
+  try {
+    loading.value = true
+    const result = await data.manualCheckin(selectedEvent.value.id, athleteId, status)
+    if (result.success) {
+      checkins.value = await data.getEventCheckins(selectedEvent.value.id)
+    } else {
+      alert(result.message || 'ไม่สามารถเช็คอินได้')
+    }
+  } catch (err) {
+    console.error('เกิดข้อผิดพลาดในการเช็คอิน:', err)
+    alert('เกิดข้อผิดพลาดในการเช็คอิน กรุณาลองใหม่อีกครั้ง')
+  } finally {
+    loading.value = false
   }
 }
 
@@ -487,9 +596,9 @@ function openExportModal() {
 
 async function exportCheckinReport() {
   if (!selectedEvent.value) return
-  exportLoading.value = true
   
   try {
+    exportLoading.value = true
     const eventData = selectedEvent.value
     const regs = registrations.value
     const checks = checkins.value
@@ -524,10 +633,11 @@ async function exportCheckinReport() {
     
     showExportModal.value = false
   } catch (err) {
-    alert('เกิดข้อผิดพลาดในการส่งออก')
+    console.error('เกิดข้อผิดพลาดในการส่งออกรายงาน:', err)
+    alert('เกิดข้อผิดพลาดในการส่งออกรายงาน กรุณาลองใหม่อีกครั้ง')
+  } finally {
+    exportLoading.value = false
   }
-  
-  exportLoading.value = false
 }
 
 function getEventTypeLabel(type) {
@@ -558,7 +668,7 @@ function formatDate(date) {
 }
 
 function formatTime(time) {
-  return time?.slice(0, 5) || ''
+  return time?.slice(0, TIME_FORMAT_LENGTH) || ''
 }
 
 function canCheckin(event) {
@@ -567,14 +677,14 @@ function canCheckin(event) {
   
   const now = new Date()
   const eventDateTime = new Date(`${event.event_date}T${event.start_time}`)
-  const checkinStart = new Date(eventDateTime.getTime() - (event.checkin_start_minutes || 30) * 60000)
+  const checkinStart = new Date(eventDateTime.getTime() - (event.checkin_start_minutes || DEFAULT_CHECKIN_START_MINUTES) * MILLISECONDS_PER_MINUTE)
   
-  // End time: use event end_time if available, otherwise 2 hours after start
+  // End time: use event end_time if available, otherwise MAX_CHECKIN_DURATION_HOURS after start
   let checkinEnd
   if (event.end_time) {
     checkinEnd = new Date(`${event.event_date}T${event.end_time}`)
   } else {
-    checkinEnd = new Date(eventDateTime.getTime() + 2 * 60 * 60000) // 2 hours after start
+    checkinEnd = new Date(eventDateTime.getTime() + MAX_CHECKIN_DURATION_HOURS * MINUTES_PER_HOUR * MILLISECONDS_PER_MINUTE)
   }
   
   return now >= checkinStart && now <= checkinEnd
@@ -685,10 +795,10 @@ function getEventTypeColor(type) {
       </div>
       <div class="alert-content">
         <strong>กิจกรรมวันนี้:</strong> {{ todayEvents.length }} รายการ
-        <span v-for="(e, i) in todayEvents.slice(0, 3)" :key="e.id">
-          {{ e.title }}{{ i < Math.min(todayEvents.length, 3) - 1 ? ', ' : '' }}
+        <span v-for="(e, i) in todayEvents.slice(0, MAX_TODAY_EVENTS_PREVIEW)" :key="e.id">
+          {{ e.title }}{{ i < Math.min(todayEvents.length, MAX_TODAY_EVENTS_PREVIEW) - 1 ? ', ' : '' }}
         </span>
-        <span v-if="todayEvents.length > 3">และอื่นๆ</span>
+        <span v-if="todayEvents.length > MAX_TODAY_EVENTS_PREVIEW">และอื่นๆ</span>
       </div>
     </div>
 
@@ -765,7 +875,7 @@ function getEventTypeColor(type) {
           <span class="day-number">{{ day.date.getDate() }}</span>
           <div class="day-events">
             <div 
-              v-for="event in day.events.slice(0, 3)" 
+              v-for="event in day.events.slice(0, MAX_CALENDAR_EVENTS_DISPLAY)" 
               :key="event.id" 
               class="day-event"
               :style="{ borderLeftColor: getEventTypeColor(event.event_type) }"
@@ -775,7 +885,7 @@ function getEventTypeColor(type) {
               <span class="event-time">{{ formatTime(event.start_time) }}</span>
               <span class="event-name">{{ event.title }}</span>
             </div>
-            <div v-if="day.events.length > 3" class="more-events" @click.stop>+{{ day.events.length - 3 }} อื่นๆ</div>
+            <div v-if="day.events.length > MAX_CALENDAR_EVENTS_DISPLAY" class="more-events" @click.stop>+{{ day.events.length - MAX_CALENDAR_EVENTS_DISPLAY }} อื่นๆ</div>
           </div>
           <div v-if="day.events.length > 0" class="day-event-count">{{ day.events.length }}</div>
         </div>
@@ -836,7 +946,7 @@ function getEventTypeColor(type) {
           กิจกรรมที่ผ่านมา ({{ pastEvents.length }})
         </h2>
         <div class="event-list">
-          <div v-for="event in pastEvents.slice(0, 10)" :key="event.id" class="event-list-item" @click="openDetail(event)">
+          <div v-for="event in pastEvents.slice(0, MAX_PAST_EVENTS_DISPLAY)" :key="event.id" class="event-list-item" @click="openDetail(event)">
             <div class="event-list-info">
               <span class="event-list-title">{{ event.title }}</span>
               <span class="event-list-date">{{ formatDate(event.event_date) }} | {{ getEventTypeLabel(event.event_type) }}</span>
@@ -1194,23 +1304,11 @@ function getEventTypeColor(type) {
     <!-- QR Scanner Modal -->
     <Modal :show="showQRScanner" @close="showQRScanner = false">
       <template #title>สแกน QR เช็คอิน</template>
-      <div class="qr-scanner-content">
-        <div class="scanner-placeholder">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-            <rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM17 17h3v3h-3z"/>
-          </svg>
-          <p>กรุณากรอกรหัสเช็คอินจาก QR Code</p>
-        </div>
-        <div class="form-group">
-          <label>รหัสเช็คอิน</label>
-          <input v-model="scanResult" type="text" placeholder="เช่น EVT-ABC123" @keyup.enter="submitCheckinCode" />
-        </div>
-        <div class="form-actions">
-          <button type="button" class="btn btn-secondary" @click="showQRScanner = false">ยกเลิก</button>
-          <button type="button" class="btn btn-primary" @click="submitCheckinCode">เช็คอิน</button>
-        </div>
-      </div>
+      <QRScanner 
+        :show="showQRScanner"
+        @scan="handleQRScanResult"
+        @close="showQRScanner = false"
+      />
     </Modal>
 
     <!-- Export Modal -->

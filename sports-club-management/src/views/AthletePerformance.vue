@@ -405,9 +405,45 @@
         </div>
       </div>
 
+      <!-- Event Participation History -->
+      <div class="section">
+        <h2>ประวัติการเข้าร่วมกิจกรรม</h2>
+        <div class="history-list">
+          <div v-if="eventHistory.length === 0" class="empty-history">
+            ไม่มีข้อมูลในเดือนนี้
+          </div>
+          <div 
+            v-for="record in eventHistory" 
+            :key="record.id" 
+            class="history-item event-item"
+            :class="record.checkin_status || 'registered'"
+          >
+            <div class="history-date">
+              <span class="day">{{ formatDay(record.event_date) }}</span>
+              <span class="weekday">{{ formatWeekday(record.event_date) }}</span>
+            </div>
+            <div class="history-info">
+              <span class="type">{{ record.event_title }}</span>
+              <span class="event-type-label">{{ getEventTypeLabel(record.event_type) }}</span>
+              <span v-if="record.checkin_time" class="checkin-time">
+                เช็คอิน: {{ formatTime(record.checkin_time) }}
+              </span>
+            </div>
+            <div class="history-status">
+              <span v-if="record.checkin_status" class="status-badge" :class="record.checkin_status">
+                {{ getCheckinStatusLabel(record.checkin_status) }}
+              </span>
+              <span v-else class="status-badge registered">
+                ลงทะเบียนแล้ว
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Attendance History -->
       <div class="section">
-        <h2>ประวัติการเข้าร่วม</h2>
+        <h2>ประวัติการเข้าฝึกซ้อม</h2>
         <div class="history-list">
           <div v-if="attendanceHistory.length === 0" class="empty-history">
             ไม่มีข้อมูลในเดือนนี้
@@ -498,6 +534,7 @@ const athleteId = ref(null)
 const athlete = ref(null)
 const stats = ref({})
 const attendanceHistory = ref([])
+const eventHistory = ref([])
 const loading = ref(true)
 const selectedMonth = ref(new Date().toISOString().slice(0, 7))
 const scoreBreakdown = ref(null)
@@ -626,6 +663,20 @@ function getLeaveTypeLabel(type) {
   return labels[type] || type
 }
 
+function getEventTypeLabel(type) {
+  const labels = { training: 'ฝึกซ้อม', competition: 'แข่งขัน', test: 'ทดสอบ', other: 'อื่นๆ' }
+  return labels[type] || type
+}
+
+function getCheckinStatusLabel(status) {
+  const labels = { on_time: 'ตรงเวลา', late: 'สาย', absent: 'ขาด' }
+  return labels[status] || status
+}
+
+function formatTime(datetime) {
+  return new Date(datetime).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
+}
+
 function prevMonth() {
   const date = new Date(selectedMonth.value + '-01')
   date.setMonth(date.getMonth() - 1)
@@ -693,6 +744,94 @@ async function loadData() {
       .order('record_date', { ascending: false })
 
     attendanceHistory.value = attendance || []
+
+    // Event participation (registrations + checkins)
+    const { data: eventRegistrations } = await supabase
+      .from('event_registrations')
+      .select(`
+        id,
+        event_id,
+        registered_at,
+        events!inner (
+          id,
+          title,
+          event_type,
+          event_date,
+          start_time
+        )
+      `)
+      .eq('athlete_id', athleteId.value)
+      .gte('events.event_date', monthStart)
+      .lte('events.event_date', endDate)
+      .order('events.event_date', { ascending: false })
+
+    // Event checkins
+    const { data: eventCheckins } = await supabase
+      .from('event_checkins')
+      .select(`
+        id,
+        event_id,
+        checkin_status,
+        checkin_time,
+        events!inner (
+          id,
+          title,
+          event_type,
+          event_date,
+          start_time
+        )
+      `)
+      .eq('athlete_id', athleteId.value)
+      .gte('events.event_date', monthStart)
+      .lte('events.event_date', endDate)
+      .order('events.event_date', { ascending: false })
+
+    // รวมข้อมูล events (registrations + checkins)
+    const eventMap = new Map()
+    
+    // เพิ่ม registrations
+    eventRegistrations?.forEach(reg => {
+      if (reg.events) {
+        eventMap.set(reg.event_id, {
+          id: reg.id,
+          event_id: reg.event_id,
+          event_title: reg.events.title,
+          event_type: reg.events.event_type,
+          event_date: reg.events.event_date,
+          start_time: reg.events.start_time,
+          registered_at: reg.registered_at,
+          checkin_status: null,
+          checkin_time: null
+        })
+      }
+    })
+    
+    // อัพเดทด้วย checkins
+    eventCheckins?.forEach(checkin => {
+      if (checkin.events) {
+        const existing = eventMap.get(checkin.event_id)
+        if (existing) {
+          existing.checkin_status = checkin.checkin_status
+          existing.checkin_time = checkin.checkin_time
+        } else {
+          eventMap.set(checkin.event_id, {
+            id: checkin.id,
+            event_id: checkin.event_id,
+            event_title: checkin.events.title,
+            event_type: checkin.events.event_type,
+            event_date: checkin.events.event_date,
+            start_time: checkin.events.start_time,
+            registered_at: null,
+            checkin_status: checkin.checkin_status,
+            checkin_time: checkin.checkin_time
+          })
+        }
+      }
+    })
+    
+    eventHistory.value = Array.from(eventMap.values()).sort((a, b) => 
+      new Date(b.event_date) - new Date(a.event_date)
+    )
 
     // Training logs
     const { data: training } = await supabase
@@ -1421,6 +1560,7 @@ onMounted(() => {
 .history-item.late { border-left: 4px solid #F59E0B; }
 .history-item.leave { border-left: 4px solid #3B82F6; }
 .history-item.absent { border-left: 4px solid #EF4444; }
+.history-item.registered { border-left: 4px solid #A3A3A3; }
 
 .history-date {
   display: flex;
@@ -1450,7 +1590,9 @@ onMounted(() => {
 }
 
 .history-info .late-note,
-.history-info .leave-note {
+.history-info .leave-note,
+.history-info .event-type-label,
+.history-info .checkin-time {
   font-size: 0.75rem;
   color: #737373;
 }
@@ -1466,6 +1608,7 @@ onMounted(() => {
 .status-badge.late { background: #FEF3C7; color: #92400E; }
 .status-badge.leave { background: #DBEAFE; color: #1E40AF; }
 .status-badge.absent { background: #FEE2E2; color: #991B1B; }
+.status-badge.registered { background: #F5F5F5; color: #525252; }
 
 .tips-section {
   background: #FEF2F2;
