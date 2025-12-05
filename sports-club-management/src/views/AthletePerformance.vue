@@ -29,19 +29,30 @@
         </div>
       </div>
 
-      <!-- Month Selector -->
-      <div class="month-selector">
-        <button @click="prevMonth" class="btn-nav">
+      <!-- ============================================ -->
+      <!-- ส่วนที่ 1: ภาพรวมผลงาน -->
+      <!-- ============================================ -->
+      <div class="section-divider">
+        <h2 class="section-title">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M15 18l-6-6 6-6"/>
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
           </svg>
-        </button>
-        <span class="month-label">{{ formatMonth(selectedMonth) }}</span>
-        <button @click="nextMonth" class="btn-nav">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M9 18l6-6-6-6"/>
-          </svg>
-        </button>
+          ภาพรวมผลงาน
+        </h2>
+        <!-- Month Selector -->
+        <div class="month-selector-inline">
+          <button @click="prevMonth" class="btn-nav">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M15 18l-6-6 6-6"/>
+            </svg>
+          </button>
+          <span class="month-label">{{ formatMonth(selectedMonth) }}</span>
+          <button @click="nextMonth" class="btn-nav">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 18l6-6-6-6"/>
+            </svg>
+          </button>
+        </div>
       </div>
 
       <!-- Score Overview with Target -->
@@ -81,7 +92,7 @@
 
       <!-- How to Earn Points Section -->
       <div class="earn-points-section">
-        <h2>วิธีเพิ่มคะแนน</h2>
+        <h3 class="subsection-title">วิธีเพิ่มคะแนน</h3>
         <div class="earn-cards">
           <!-- Attendance Card -->
           <div class="earn-card">
@@ -243,7 +254,7 @@
 
       <!-- Tier Requirements -->
       <div class="tier-requirements">
-        <h2>เกณฑ์แต่ละระดับ</h2>
+        <h3 class="subsection-title">เกณฑ์แต่ละระดับ</h3>
         <div class="tier-cards">
           <div class="tier-card" :class="{ active: stats.performance_tier === 'excellent' }">
             <div class="tier-header excellent">
@@ -306,6 +317,18 @@
         </div>
       </div>
 
+      <!-- ============================================ -->
+      <!-- ส่วนที่ 3: คำแนะนำและรายละเอียด -->
+      <!-- ============================================ -->
+      <div class="section-divider">
+        <h2 class="section-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+          </svg>
+          คำแนะนำและรายละเอียด
+        </h2>
+      </div>
+
       <!-- Action Suggestions -->
       <div class="action-section" v-if="suggestions.length > 0">
         <h2>สิ่งที่ควรทำเพื่อเพิ่มคะแนน</h2>
@@ -325,7 +348,7 @@
         </div>
       </div>
 
-      <!-- Stats Cards -->
+      <!-- Quick Stats Cards -->
       <div class="stats-grid">
         <div class="stat-card">
           <div class="stat-icon attendance">
@@ -382,9 +405,24 @@
         </div>
       </div>
 
-      <!-- Attendance Breakdown -->
+      <!-- ============================================ -->
+      <!-- ส่วนที่ 2: ประวัติกิจกรรม -->
+      <!-- ============================================ -->
+      <div class="section-divider">
+        <h2 class="section-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+            <line x1="16" y1="2" x2="16" y2="6"/>
+            <line x1="8" y1="2" x2="8" y2="6"/>
+            <line x1="3" y1="10" x2="21" y2="10"/>
+          </svg>
+          ประวัติกิจกรรม
+        </h2>
+      </div>
+
+      <!-- Attendance Summary -->
       <div class="section">
-        <h2>สรุปการเข้าร่วม</h2>
+        <h3 class="subsection-title">สรุปการเข้าร่วม</h3>
         <div class="attendance-breakdown">
           <div class="breakdown-item on-time">
             <span class="count">{{ stats.attended_on_time || 0 }}</span>
@@ -407,10 +445,7 @@
 
       <!-- Activity History Section -->
       <div class="section activity-history-section">
-        <div class="section-header">
-          <h2>ประวัติการเข้าร่วมกิจกรรมทั้งหมด</h2>
-          <p class="section-desc">บันทึกการเข้าร่วมกิจกรรม การฝึกซ้อม และการแข่งขันของคุณ</p>
-        </div>
+        <h3 class="subsection-title">รายการกิจกรรมทั้งหมด</h3>
 
         <!-- Filter Tabs -->
         <div class="filter-tabs">
@@ -499,7 +534,7 @@
 
       <!-- Improvement Tips (for needs_improvement) -->
       <div v-if="stats.performance_tier === 'needs_improvement'" class="tips-section">
-        <h2>จุดที่ควรปรับปรุง</h2>
+        <h3 class="subsection-title">จุดที่ควรปรับปรุง</h3>
         <ul class="tips-list">
           <li v-if="stats.attendance_rate < 70">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1096,36 +1131,38 @@ onMounted(() => {
 .tier-badge.average { background: #FEF3C7; color: #92400E; }
 .tier-badge.needs_improvement { background: #FEE2E2; color: #991B1B; }
 
-.month-selector {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
+/* ลบ month-selector เดิม เพราะใช้ month-selector-inline แทน */
 
 .btn-nav {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
   border: 1px solid #E5E5E5;
   background: #fff;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: all 0.2s;
+}
+
+.btn-nav:hover {
+  background: #171717;
+  border-color: #171717;
+  color: #fff;
 }
 
 .btn-nav svg {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
 }
 
 .month-label {
-  font-size: 1.125rem;
-  font-weight: 500;
-  min-width: 150px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  min-width: 120px;
   text-align: center;
+  color: #171717;
 }
 
 .score-section {
@@ -1569,14 +1606,46 @@ onMounted(() => {
   color: #737373;
 }
 
-.section {
-  margin-bottom: 2rem;
+/* Section Dividers */
+.section-divider {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 3rem 0 1.5rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 2px solid #171717;
 }
 
-.section h2 {
-  font-size: 1.125rem;
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0;
+  color: #171717;
+}
+
+.section-title svg {
+  width: 24px;
+  height: 24px;
+}
+
+.month-selector-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.subsection-title {
+  font-size: 1rem;
   font-weight: 600;
   margin: 0 0 1rem;
+  color: #171717;
+}
+
+.section {
+  margin-bottom: 2rem;
 }
 
 /* Activity History Section */
