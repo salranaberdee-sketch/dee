@@ -405,71 +405,92 @@
         </div>
       </div>
 
-      <!-- Event Participation History -->
-      <div class="section">
-        <h2>ประวัติการเข้าร่วมกิจกรรม</h2>
-        <div class="history-list">
-          <div v-if="eventHistory.length === 0" class="empty-history">
-            ไม่มีข้อมูลในเดือนนี้
-          </div>
-          <div 
-            v-for="record in eventHistory" 
-            :key="record.id" 
-            class="history-item event-item"
-            :class="record.checkin_status || 'registered'"
-          >
-            <div class="history-date">
-              <span class="day">{{ formatDay(record.event_date) }}</span>
-              <span class="weekday">{{ formatWeekday(record.event_date) }}</span>
-            </div>
-            <div class="history-info">
-              <span class="type">{{ record.event_title }}</span>
-              <span class="event-type-label">{{ getEventTypeLabel(record.event_type) }}</span>
-              <span v-if="record.checkin_time" class="checkin-time">
-                เช็คอิน: {{ formatTime(record.checkin_time) }}
-              </span>
-            </div>
-            <div class="history-status">
-              <span v-if="record.checkin_status" class="status-badge" :class="record.checkin_status">
-                {{ getCheckinStatusLabel(record.checkin_status) }}
-              </span>
-              <span v-else class="status-badge registered">
-                ลงทะเบียนแล้ว
-              </span>
-            </div>
-          </div>
+      <!-- Activity History Section -->
+      <div class="section activity-history-section">
+        <div class="section-header">
+          <h2>ประวัติการเข้าร่วมกิจกรรมทั้งหมด</h2>
+          <p class="section-desc">บันทึกการเข้าร่วมกิจกรรม การฝึกซ้อม และการแข่งขันของคุณ</p>
         </div>
-      </div>
 
-      <!-- Attendance History -->
-      <div class="section">
-        <h2>ประวัติการเข้าฝึกซ้อม</h2>
+        <!-- Filter Tabs -->
+        <div class="filter-tabs">
+          <button 
+            class="filter-tab" 
+            :class="{ active: activityFilter === 'all' }"
+            @click="activityFilter = 'all'"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <line x1="9" y1="3" x2="9" y2="21"/>
+            </svg>
+            ทั้งหมด ({{ allActivities.length }})
+          </button>
+          <button 
+            class="filter-tab" 
+            :class="{ active: activityFilter === 'events' }"
+            @click="activityFilter = 'events'"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+              <line x1="16" y1="2" x2="16" y2="6"/>
+              <line x1="8" y1="2" x2="8" y2="6"/>
+              <line x1="3" y1="10" x2="21" y2="10"/>
+            </svg>
+            กิจกรรม ({{ eventHistory.length }})
+          </button>
+          <button 
+            class="filter-tab" 
+            :class="{ active: activityFilter === 'training' }"
+            @click="activityFilter = 'training'"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 8h1a4 4 0 010 8h-1M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/>
+              <line x1="6" y1="1" x2="6" y2="4"/>
+              <line x1="10" y1="1" x2="10" y2="4"/>
+              <line x1="14" y1="1" x2="14" y2="4"/>
+            </svg>
+            ฝึกซ้อม ({{ attendanceHistory.length }})
+          </button>
+        </div>
+
+        <!-- Activity List -->
         <div class="history-list">
-          <div v-if="attendanceHistory.length === 0" class="empty-history">
-            ไม่มีข้อมูลในเดือนนี้
+          <div v-if="filteredActivities.length === 0" class="empty-history">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <p>ไม่มีข้อมูลในเดือนนี้</p>
           </div>
+
+          <!-- Event Activities -->
           <div 
-            v-for="record in attendanceHistory" 
-            :key="record.id" 
+            v-for="activity in filteredActivities" 
+            :key="activity.id" 
             class="history-item"
-            :class="record.status"
+            :class="[activity.type, activity.status]"
           >
             <div class="history-date">
-              <span class="day">{{ formatDay(record.record_date) }}</span>
-              <span class="weekday">{{ formatWeekday(record.record_date) }}</span>
+              <span class="day">{{ formatDay(activity.date) }}</span>
+              <span class="weekday">{{ formatWeekday(activity.date) }}</span>
             </div>
             <div class="history-info">
-              <span class="type">{{ getTypeLabel(record.record_type) }}</span>
-              <span v-if="record.status === 'late'" class="late-note">
-                สาย {{ record.late_minutes }} นาที
-              </span>
-              <span v-if="record.status === 'leave'" class="leave-note">
-                {{ getLeaveTypeLabel(record.leave_type) }}: {{ record.leave_reason }}
-              </span>
+              <div class="activity-title">
+                <span class="type">{{ activity.title }}</span>
+                <span class="activity-type-badge" :class="activity.type">
+                  {{ activity.typeLabel }}
+                </span>
+              </div>
+              <div class="activity-details">
+                <span v-if="activity.details" class="details-text">
+                  {{ activity.details }}
+                </span>
+              </div>
             </div>
             <div class="history-status">
-              <span class="status-badge" :class="record.status">
-                {{ getStatusLabel(record.status) }}
+              <span class="status-badge" :class="activity.status">
+                {{ activity.statusLabel }}
               </span>
             </div>
           </div>
@@ -538,6 +559,7 @@ const eventHistory = ref([])
 const loading = ref(true)
 const selectedMonth = ref(new Date().toISOString().slice(0, 7))
 const scoreBreakdown = ref(null)
+const activityFilter = ref('all')
 
 function getTierLabel(tier) {
   return evaluationStore.getTierLabel(tier)
@@ -581,6 +603,59 @@ const pointsToNextTier = computed(() => {
   const score = stats.value.overall_score || 0
   if (score >= 85) return 0
   return nextTier.value.required - score
+})
+
+// รวมข้อมูลกิจกรรมทั้งหมด
+const allActivities = computed(() => {
+  const activities = []
+  
+  // เพิ่มกิจกรรมจาก events
+  eventHistory.value.forEach(event => {
+    activities.push({
+      id: `event-${event.id}`,
+      type: 'event',
+      date: event.event_date,
+      title: event.event_title,
+      typeLabel: getEventTypeLabel(event.event_type),
+      status: event.checkin_status || 'registered',
+      statusLabel: event.checkin_status ? getCheckinStatusLabel(event.checkin_status) : 'ลงทะเบียนแล้ว',
+      details: event.checkin_time ? `เช็คอิน: ${formatTime(event.checkin_time)}` : null
+    })
+  })
+  
+  // เพิ่มกิจกรรมจาก attendance
+  attendanceHistory.value.forEach(record => {
+    let details = null
+    if (record.status === 'late') {
+      details = `สาย ${record.late_minutes} นาที`
+    } else if (record.status === 'leave') {
+      details = `${getLeaveTypeLabel(record.leave_type)}: ${record.leave_reason}`
+    }
+    
+    activities.push({
+      id: `attendance-${record.id}`,
+      type: 'training',
+      date: record.record_date,
+      title: getTypeLabel(record.record_type),
+      typeLabel: 'ฝึกซ้อม',
+      status: record.status,
+      statusLabel: getStatusLabel(record.status),
+      details
+    })
+  })
+  
+  // เรียงตามวันที่ (ใหม่สุดก่อน)
+  return activities.sort((a, b) => new Date(b.date) - new Date(a.date))
+})
+
+// กรองกิจกรรมตาม filter
+const filteredActivities = computed(() => {
+  if (activityFilter.value === 'events') {
+    return allActivities.value.filter(a => a.type === 'event')
+  } else if (activityFilter.value === 'training') {
+    return allActivities.value.filter(a => a.type === 'training')
+  }
+  return allActivities.value
 })
 
 // คำแนะนำเพื่อเพิ่มคะแนน (using configured weights)
@@ -1506,6 +1581,80 @@ onMounted(() => {
   margin: 0 0 1rem;
 }
 
+/* Activity History Section */
+.activity-history-section {
+  background: #fff;
+  border: 1px solid #E5E5E5;
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+
+.section-header {
+  margin-bottom: 1.5rem;
+}
+
+.section-header h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem;
+}
+
+.section-desc {
+  font-size: 0.875rem;
+  color: #737373;
+  margin: 0;
+}
+
+/* Filter Tabs */
+.filter-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 2px solid #E5E5E5;
+  padding-bottom: 0.5rem;
+}
+
+.filter-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: transparent;
+  border: none;
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #737373;
+  transition: all 0.2s;
+}
+
+.filter-tab svg {
+  width: 18px;
+  height: 18px;
+}
+
+.filter-tab:hover {
+  background: #F5F5F5;
+  color: #171717;
+}
+
+.filter-tab.active {
+  background: #171717;
+  color: #fff;
+  position: relative;
+}
+
+.filter-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #171717;
+}
+
 .attendance-breakdown {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -1541,19 +1690,39 @@ onMounted(() => {
 }
 
 .empty-history {
-  text-align: center;
-  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 3rem 2rem;
   color: #737373;
+}
+
+.empty-history svg {
+  width: 48px;
+  height: 48px;
+  opacity: 0.5;
+}
+
+.empty-history p {
+  margin: 0;
+  font-size: 0.875rem;
 }
 
 .history-item {
   display: flex;
   align-items: center;
   gap: 1rem;
-  padding: 0.75rem 1rem;
-  background: #fff;
+  padding: 1rem;
+  background: #FAFAFA;
   border: 1px solid #E5E5E5;
   border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.history-item:hover {
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .history-item.on_time { border-left: 4px solid #22C55E; }
@@ -1583,17 +1752,49 @@ onMounted(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
+  gap: 0.5rem;
+}
+
+.activity-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
 .history-info .type {
-  font-weight: 500;
+  font-weight: 600;
+  font-size: 1rem;
+  color: #171717;
 }
 
-.history-info .late-note,
-.history-info .leave-note,
-.history-info .event-type-label,
-.history-info .checkin-time {
+.activity-type-badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
   font-size: 0.75rem;
+  font-weight: 500;
+  background: #F5F5F5;
+  color: #525252;
+}
+
+.activity-type-badge.event {
+  background: #DBEAFE;
+  color: #1E40AF;
+}
+
+.activity-type-badge.training {
+  background: #D1FAE5;
+  color: #065F46;
+}
+
+.activity-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.details-text {
+  font-size: 0.875rem;
   color: #737373;
 }
 
