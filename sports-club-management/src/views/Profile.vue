@@ -380,17 +380,20 @@ async function save() {
 
 async function logout() {
   if (confirm('ยืนยันออกจากระบบ?')) {
-    try {
-      console.log('🚪 กำลัง logout...')
-      await auth.logout()
-      console.log('✅ logout สำเร็จ, กำลัง redirect...')
-      // ใช้ window.location แทน router.push เพื่อ force reload
-      window.location.href = '/login'
-    } catch (error) {
-      console.error('❌ logout error:', error)
-      // ถ้า error ก็ยังพยายาม redirect
-      window.location.href = '/login'
-    }
+    // ล้าง storage ทันทีก่อน
+    localStorage.clear()
+    sessionStorage.clear()
+    
+    // เรียก logout แบบไม่รอ
+    auth.logout().finally(() => {
+      // Force reload ไปหน้า login
+      window.location.replace('/login')
+    })
+    
+    // Redirect ทันทีไม่ต้องรอ
+    setTimeout(() => {
+      window.location.replace('/login')
+    }, 500)
   }
 }
 

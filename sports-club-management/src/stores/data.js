@@ -411,11 +411,19 @@ export const useDataStore = defineStore('data', () => {
   }
 
   // ============ TRAINING LOGS ============
+  /**
+   * ดึงบันทึกการฝึกซ้อม - กรองตาม role
+   * Admin: ดูทั้งหมด
+   * Coach: ดูในชมรมเดียวกัน
+   * Athlete: ดูเฉพาะตัวเอง
+   */
   async function fetchTrainingLogs() {
     loading.value = true
+    
+    // ดึงข้อมูลทั้งหมด (RLS จะกรองให้อัตโนมัติ)
     const { data, error: err } = await supabase
       .from('training_logs')
-      .select('*, athletes(name), coaches(name), clubs(name)')
+      .select('*, athletes(name), coaches(name), clubs(name), activity_categories(name, icon)')
       .order('date', { ascending: false })
     
     if (!err) trainingLogs.value = data || []
@@ -427,7 +435,7 @@ export const useDataStore = defineStore('data', () => {
     const { data, error: err } = await supabase
       .from('training_logs')
       .insert(log)
-      .select('*, athletes(name), coaches(name), clubs(name)')
+      .select('*, athletes(name), coaches(name), clubs(name), activity_categories(name, icon)')
       .single()
     
     if (!err && data) {
@@ -442,7 +450,7 @@ export const useDataStore = defineStore('data', () => {
       .from('training_logs')
       .update({ ...updates, updated_at: new Date().toISOString() })
       .eq('id', id)
-      .select('*, athletes(name), coaches(name), clubs(name)')
+      .select('*, athletes(name), coaches(name), clubs(name), activity_categories(name, icon)')
       .single()
     
     if (!err && data) {
@@ -463,51 +471,93 @@ export const useDataStore = defineStore('data', () => {
   }
 
   // ============ ACTIVITY CATEGORIES ============
-  // NOTE: ตาราง activity_categories ยังไม่ได้สร้าง - ฟังก์ชันเหล่านี้ return stub values
 
   /**
    * ดึงหมวดหมู่กิจกรรมที่ใช้งานอยู่
-   * @returns {Promise<Array>} - array ว่าง (รอสร้างตาราง)
+   * @returns {Promise<Array>} - รายการหมวดหมู่ที่ active
    */
   async function fetchActivityCategories() {
-    // TODO: สร้างตาราง activity_categories
-    activityCategories.value = []
-    return []
+    loading.value = true
+    const { data, error: err } = await supabase
+      .from('activity_categories')
+      .select('*')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true })
+    
+    if (!err) {
+      activityCategories.value = data || []
+      return data || []
+    } else {
+      error.value = err.message
+      activityCategories.value = []
+      return []
+    }
+    loading.value = false
   }
 
   /**
    * ดึงหมวดหมู่กิจกรรมทั้งหมด - Admin only
-   * @returns {Promise<Array>} - array ว่าง (รอสร้างตาราง)
+   * @returns {Promise<Array>} - รายการหมวดหมู่ทั้งหมด
    */
   async function fetchAllActivityCategories() {
-    // TODO: สร้างตาราง activity_categories
+    const { data, error: err } = await supabase
+      .from('activity_categories')
+      .select('*')
+      .order('sort_order', { ascending: true })
+    
+    if (!err) return data || []
     return []
   }
 
   /**
    * เพิ่มหมวดหมู่กิจกรรมใหม่ - Admin only
-   * @returns {Promise<{success: boolean, message: string}>}
+   * @param {Object} categoryData - ข้อมูลหมวดหมู่
+   * @returns {Promise<{success: boolean, data?: Object, message?: string}>}
    */
   async function addActivityCategory(categoryData) {
-    // TODO: สร้างตาราง activity_categories
-    return { success: false, message: 'ฟีเจอร์นี้ยังไม่พร้อมใช้งาน' }
+    const { data, error: err } = await supabase
+      .from('activity_categories')
+      .insert(categoryData)
+      .select()
+      .single()
+    
+    if (!err && data) {
+      activityCategories.value.push(data)
+      activityCategories.value.sort((a, b) => a.sort_order - b.sort_order)
+      return { success: true, data }
+    }
+    return { success: false, message: err?.message }
   }
 
   /**
    * อัพเดทหมวดหมู่กิจกรรม - Admin only
-   * @returns {Promise<{success: boolean, message: string}>}
+   * @param {string} id - รหัสหมวดหมู่
+   * @param {Object} updates - ข้อมูลที่ต้องการอัพเดท
+   * @returns {Promise<{success: boolean, data?: Object, message?: string}>}
    */
   async function updateActivityCategory(id, updates) {
-    // TODO: สร้างตาราง activity_categories
-    return { success: false, message: 'ฟีเจอร์นี้ยังไม่พร้อมใช้งาน' }
+    const { data, error: err } = await supabase
+      .from('activity_categories')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single()
+    
+    if (!err && data) {
+      const idx = activityCategories.value.findIndex(c => c.id === id)
+      if (idx !== -1) activityCategories.value[idx] = data
+      return { success: true, data }
+    }
+    return { success: false, message: err?.message }
   }
 
   /**
    * ดึงหมวดหมู่ตาม ID
-   * @returns {undefined}
+   * @param {string} id - รหัสหมวดหมู่
+   * @returns {Object|undefined} - หมวดหมู่ที่ตรงกับ ID
    */
   function getCategoryById(id) {
-    return undefined
+    return activityCategories.value.find(c => c.id === id)
   }
 
   /**
@@ -612,14 +662,56 @@ export const useDataStore = defineStore('data', () => {
 
   /**
    * ดึงข้อมูลการกระจายการฝึกซ้อมตามหมวดหมู่
-   * NOTE: ตาราง activity_categories ยังไม่ได้สร้าง - return empty array
    * @param {string} userId - รหัสผู้ใช้
    * @param {Object} dateRange - ช่วงวันที่ (optional)
-   * @returns {Promise<Array>} - array ว่าง (รอสร้างตาราง activity_categories)
+   * @returns {Promise<Array>} - รายการการกระจายตามหมวดหมู่
    */
   async function getCategoryDistribution(userId, dateRange = {}) {
-    // TODO: สร้างตาราง activity_categories และเพิ่ม category_id ใน training_logs
-    return []
+    let query = supabase
+      .from('training_logs')
+      .select('category_id, activity_categories(name)')
+      .eq('user_id', userId)
+    
+    if (dateRange.startDate) {
+      query = query.gte('date', dateRange.startDate)
+    }
+    if (dateRange.endDate) {
+      query = query.lte('date', dateRange.endDate)
+    }
+
+    const { data, error: err } = await query
+
+    if (err || !data) {
+      return []
+    }
+
+    // นับจำนวนแต่ละหมวดหมู่
+    const categoryCount = {}
+    let totalLogs = 0
+
+    data.forEach(log => {
+      if (log.category_id && log.activity_categories?.name) {
+        const categoryName = log.activity_categories.name
+        categoryCount[log.category_id] = categoryCount[log.category_id] || {
+          categoryId: log.category_id,
+          categoryName: categoryName,
+          count: 0
+        }
+        categoryCount[log.category_id].count++
+        totalLogs++
+      }
+    })
+
+    // คำนวณเปอร์เซ็นต์
+    const distribution = Object.values(categoryCount).map(item => ({
+      ...item,
+      percentage: totalLogs > 0 ? Math.round((item.count / totalLogs) * 100) : 0
+    }))
+
+    // เรียงตามจำนวนมากไปน้อย
+    distribution.sort((a, b) => b.count - a.count)
+
+    return distribution
   }
 
   /**

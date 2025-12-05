@@ -3,14 +3,16 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useDataStore } from '@/stores/data'
 import Modal from '@/components/Modal.vue'
+import TimerModal from '@/components/TimerModal.vue'
 
 const auth = useAuthStore()
 const data = useDataStore()
 
+const showTimerModal = ref(false)
 const showModal = ref(false)
 const editingId = ref(null)
 const selectedCategoryFilter = ref(null)
-const showStats = ref(true)
+const showStats = ref(false) // ซ่อน Stats section เป็น default
 const form = ref({ 
   athlete_id: null, 
   coach_id: null, 
@@ -19,10 +21,10 @@ const form = ref({
   duration: 60, 
   activities: '', 
   notes: '', 
-  rating: 3,
   category_id: null,
   custom_activity: ''
 })
+const validationError = ref('') // สำหรับแสดง error message
 
 // Statistics data - Requirements 2.1, 2.2, 2.3, 2.4
 const weeklyChartData = ref([])
@@ -35,10 +37,7 @@ const goalProgress = ref(null)
 const showGoalModal = ref(false)
 const goalForm = ref({ target_value: 3 })
 
-// Streak and achievements data - Requirements 4.1, 4.2, 4.3, 4.4
-const currentStreak = ref(0)
-const userAchievements = ref([])
-const nextMilestone = ref(null)
+// Streak และ achievements ถูกลบ - ลดความซับซ้อน
 
 // Find the "อื่นๆ" category for custom activity input
 const otherCategory = computed(() => {
@@ -68,22 +67,17 @@ async function loadStatistics() {
   
   statsLoading.value = true
   try {
-    const [chartData, comparison, distribution, progress, streakResult, achievements] = await Promise.all([
+    const [chartData, comparison, distribution, progress] = await Promise.all([
       data.getWeeklyChartData(userId),
       data.getWeeklyComparison(userId),
       data.getCategoryDistribution(userId),
-      data.getGoalProgress(userId),
-      data.checkAndAwardAchievements(userId),
-      data.fetchUserAchievements(userId)
+      data.getGoalProgress(userId)
     ])
     
     weeklyChartData.value = chartData
     weeklyComparison.value = comparison
     categoryDistribution.value = distribution
     goalProgress.value = progress
-    currentStreak.value = streakResult?.currentStreak || 0
-    userAchievements.value = achievements || []
-    nextMilestone.value = data.getNextMilestone(currentStreak.value)
     
     // Set goal form with current goal value
     if (progress?.goal) {
@@ -118,10 +112,7 @@ async function saveGoal() {
   }
 }
 
-// Get achievement display info - Requirements 4.4
-function getAchievementInfo(achievementType) {
-  return data.getAchievementInfo(achievementType)
-}
+// getAchievementInfo ถูกลบ - ลดความซับซ้อน
 
 // Computed stats from filtered logs - Requirements 2.1
 const totalSessions = computed(() => filteredLogs.value.length)
@@ -129,11 +120,7 @@ const totalHours = computed(() => {
   const minutes = filteredLogs.value.reduce((sum, log) => sum + (log.duration || 0), 0)
   return Math.round((minutes / 60) * 10) / 10
 })
-const avgRating = computed(() => {
-  if (filteredLogs.value.length === 0) return 0
-  const total = filteredLogs.value.reduce((sum, log) => sum + (log.rating || 0), 0)
-  return Math.round((total / filteredLogs.value.length) * 10) / 10
-})
+// avgRating ถูกลบ - ไม่ใช้ระบบคะแนน
 
 // Get max sessions for chart scaling
 const maxChartSessions = computed(() => {
@@ -195,8 +182,15 @@ function getCategoryIcon(log) {
   return null
 }
 
+// เปิด Timer Modal
+function openTimer() {
+  showTimerModal.value = true
+}
+
+// เปิด Manual Entry Modal
 function openAdd() {
   editingId.value = null
+  validationError.value = '' // Clear validation error
   form.value = { 
     athlete_id: currentAthlete.value?.id || availableAthletes.value[0]?.id || null, 
     coach_id: currentCoach.value?.id || null,
@@ -205,7 +199,6 @@ function openAdd() {
     duration: 60, 
     activities: '', 
     notes: '', 
-    rating: 3,
     category_id: data.activityCategories[0]?.id || null,
     custom_activity: ''
   }
@@ -214,6 +207,7 @@ function openAdd() {
 
 function openEdit(log) {
   editingId.value = log.id
+  validationError.value = '' // Clear validation error
   form.value = { 
     athlete_id: log.athlete_id,
     coach_id: log.coach_id,
@@ -222,14 +216,70 @@ function openEdit(log) {
     duration: log.duration,
     activities: log.activities,
     notes: log.notes,
-    rating: log.rating,
     category_id: log.category_id || null,
     custom_activity: log.custom_activity || ''
   }
   showModal.value = true
 }
 
+// บันทึกจาก Timer Modal
+async function saveFromTimer(logData) {
+  const payload = {
+    ...logData,
+    coach_id: currentCoach.value?.id || null,
+    club_id: currentCoach.value?.club_id || currentAthlete.value?.club_id || null
+  }
+  
+  // ถ้าเป็น Athlete ใช้ athlete_id ของตัวเอง
+  if (auth.isAthlete) {
+    payload.athlete_id = currentAthlete.value?.id
+  }
+  
+  await data.addTrainingLog(payload)
+  showTimerModal.value = false
+  
+  // Reload statistics
+  await loadStatistics()
+}
+
+// Validate form - Requirements 3.3
+function validateForm() {
+  validationError.value = ''
+  
+  // ตรวจสอบนักกีฬา (สำหรับ Coach/Admin)
+  if (!auth.isAthlete && !form.value.athlete_id) {
+    validationError.value = 'กรุณาเลือกนักกีฬา'
+    return false
+  }
+  
+  // ตรวจสอบวันที่
+  if (!form.value.date) {
+    validationError.value = 'กรุณาระบุวันที่'
+    return false
+  }
+  
+  // ตรวจสอบระยะเวลา
+  if (!form.value.duration || form.value.duration <= 0) {
+    validationError.value = 'ระยะเวลาต้องมากกว่า 0 นาที'
+    return false
+  }
+  
+  // ตรวจสอบกิจกรรม
+  if (!form.value.activities || form.value.activities.trim() === '') {
+    validationError.value = 'กรุณากรอกกิจกรรมที่ฝึก'
+    return false
+  }
+  
+  return true
+}
+
+// บันทึกจาก Manual Entry Modal
 async function save() {
+  // Validate form - Requirements 3.3
+  if (!validateForm()) {
+    return
+  }
+  
   const payload = { ...form.value }
   
   // Clear custom_activity if not "อื่นๆ" category
@@ -242,7 +292,13 @@ async function save() {
   } else {
     await data.addTrainingLog(payload)
   }
+  
+  // Clear validation error
+  validationError.value = ''
   showModal.value = false
+  
+  // Reload statistics
+  await loadStatistics()
 }
 
 async function remove() {
@@ -272,7 +328,18 @@ function clearCategoryFilter() {
           </svg>
           จัดการหมวดหมู่
         </router-link>
-        <button v-if="!auth.isAthlete || currentAthlete" class="btn btn-sm btn-primary" @click="openAdd">+ เพิ่ม</button>
+        <button v-if="!auth.isAthlete || currentAthlete" class="btn btn-sm btn-secondary" @click="openAdd">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+            <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+          </svg>
+          บันทึกด้วยตนเอง
+        </button>
+        <button v-if="!auth.isAthlete || currentAthlete" class="btn btn-sm btn-primary" @click="openTimer">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+          </svg>
+          เริ่มฝึก
+        </button>
       </div>
     </div>
 
@@ -314,10 +381,6 @@ function clearCategoryFilter() {
             <div class="mini-stat">
               <span class="mini-stat-value">{{ totalHours }}</span>
               <span class="mini-stat-label">ชั่วโมง</span>
-            </div>
-            <div class="mini-stat">
-              <span class="mini-stat-value">{{ avgRating || '—' }}</span>
-              <span class="mini-stat-label">คะแนนเฉลี่ย</span>
             </div>
           </div>
           
@@ -430,76 +493,7 @@ function clearCategoryFilter() {
         </div>
       </div>
       
-      <!-- Streak and Achievements Section - Requirements 4.1, 4.2, 4.3, 4.4 -->
-      <div class="streak-section">
-        <!-- Current Streak Display - Requirements 4.3 -->
-        <div class="streak-display">
-          <div class="streak-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="28" height="28">
-              <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
-            </svg>
-          </div>
-          <div class="streak-info">
-            <span class="streak-count">{{ currentStreak }}</span>
-            <span class="streak-label">วันติดต่อกัน</span>
-          </div>
-          <div v-if="currentStreak === 0" class="streak-message">
-            <span>เริ่มต้นใหม่วันนี้!</span>
-          </div>
-          <div v-else-if="nextMilestone" class="streak-next">
-            <span>อีก {{ nextMilestone.daysRemaining }} วัน ถึง {{ nextMilestone.milestone }} วัน</span>
-          </div>
-          <div v-else class="streak-max">
-            <span>บรรลุทุกเป้าหมายแล้ว!</span>
-          </div>
-        </div>
-        
-        <!-- Achievement Badges - Requirements 4.4 -->
-        <div class="achievements-section">
-          <h3 class="achievements-title">รางวัลที่ได้รับ</h3>
-          
-          <div v-if="userAchievements.length === 0" class="no-achievements">
-            <p>ยังไม่มีรางวัล - ฝึกซ้อมต่อเนื่องเพื่อรับรางวัล!</p>
-          </div>
-          
-          <div v-else class="achievements-grid">
-            <div 
-              v-for="achievement in userAchievements" 
-              :key="achievement.id" 
-              class="achievement-badge"
-              :title="getAchievementInfo(achievement.achievement_type).description"
-            >
-              <div class="badge-icon">
-                <svg v-if="getAchievementInfo(achievement.achievement_type).icon === 'star'" viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                </svg>
-                <svg v-else-if="getAchievementInfo(achievement.achievement_type).icon === 'fire'" viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
-                  <path d="M12 2c-5.33 4.55-8 8.48-8 11.8 0 4.98 3.8 8.2 8 8.2s8-3.22 8-8.2c0-3.32-2.67-7.25-8-11.8z"/>
-                </svg>
-                <svg v-else-if="getAchievementInfo(achievement.achievement_type).icon === 'trophy'" viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
-                  <path d="M12 2L15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2z"/>
-                </svg>
-                <svg v-else-if="getAchievementInfo(achievement.achievement_type).icon === 'medal'" viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
-                  <circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/>
-                </svg>
-                <svg v-else-if="getAchievementInfo(achievement.achievement_type).icon === 'crown'" viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
-                  <path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7zm3 14h14v2H5v-2z"/>
-                </svg>
-                <svg v-else viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
-                  <circle cx="12" cy="12" r="10"/>
-                </svg>
-              </div>
-              <span class="badge-name">{{ getAchievementInfo(achievement.achievement_type).name }}</span>
-            </div>
-          </div>
-          
-          <!-- Next Milestone Preview -->
-          <div v-if="nextMilestone" class="next-milestone">
-            <span class="milestone-label">เป้าหมายถัดไป:</span>
-            <span class="milestone-value">ฝึกซ้อมติดต่อกัน {{ nextMilestone.milestone }} วัน</span>
-          </div>
-        </div>
-      </div>
+      <!-- Streak Section ถูกลบ - ลดความซับซ้อน -->
 
       <div v-if="sortedLogs.length === 0" class="card">
         <div class="empty-state">
@@ -531,9 +525,6 @@ function clearCategoryFilter() {
               <!-- Show custom activity if "อื่นๆ" category -->
               <p v-if="log.custom_activity" class="log-custom-activity">{{ log.custom_activity }}</p>
             </div>
-            <div class="rating">
-              <span v-for="i in 5" :key="i" :class="['star', { filled: i <= log.rating }]">★</span>
-            </div>
           </div>
           <p v-if="log.notes" class="log-notes">{{ log.notes }}</p>
         </div>
@@ -544,7 +535,27 @@ function clearCategoryFilter() {
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
     </button>
 
-    <Modal :show="showModal" :title="editingId ? 'แก้ไขบันทึก' : 'บันทึกใหม่'" @close="showModal = false">
+    <!-- Timer Modal -->
+    <TimerModal
+      :show="showTimerModal"
+      :is-coach="auth.isCoach"
+      :is-admin="auth.isAdmin"
+      :athletes="availableAthletes"
+      :activity-categories="data.activityCategories"
+      @close="showTimerModal = false"
+      @save="saveFromTimer"
+    />
+
+    <!-- Manual Entry Modal -->
+    <Modal :show="showModal" :title="editingId ? 'แก้ไขบันทึก' : 'บันทึกด้วยตนเอง'" @close="showModal = false">
+      <!-- Validation Error Message - Requirements 3.3 -->
+      <div v-if="validationError" class="validation-error">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <span>{{ validationError }}</span>
+      </div>
+      
       <form @submit.prevent="save">
         <div class="form-group" v-if="!auth.isAthlete">
           <label>นักกีฬา</label>
@@ -592,12 +603,6 @@ function clearCategoryFilter() {
         <div class="form-group">
           <label>บันทึกเพิ่มเติม</label>
           <textarea v-model="form.notes" class="form-control" rows="3" placeholder="สภาพร่างกาย, ความรู้สึก"></textarea>
-        </div>
-        <div class="form-group">
-          <label>คะแนน</label>
-          <div class="rating-input">
-            <button v-for="i in 5" :key="i" type="button" :class="['star-btn', { active: i <= form.rating }]" @click="form.rating = i">★</button>
-          </div>
         </div>
       </form>
       <template #footer>
@@ -709,7 +714,7 @@ function clearCategoryFilter() {
   letter-spacing: 0.5px;
 }
 
-.mini-stats { display: flex; gap: 12px; }
+.mini-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
 .mini-stat { 
   flex: 1; background: var(--gray-50); border-radius: var(--radius-md);
   padding: 12px; text-align: center;
@@ -968,150 +973,7 @@ function clearCategoryFilter() {
   margin-top: 6px;
 }
 
-/* Streak Section - Requirements 4.1, 4.2, 4.3 */
-.streak-section {
-  background: var(--white);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--gray-100);
-  padding: 16px;
-  margin-bottom: 20px;
-}
-
-.streak-display {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px;
-  background: var(--gray-900);
-  border-radius: var(--radius-md);
-  color: var(--white);
-  margin-bottom: 16px;
-}
-
-.streak-icon {
-  width: 56px;
-  height: 56px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.streak-icon svg {
-  color: var(--white);
-}
-
-.streak-info {
-  flex: 1;
-}
-
-.streak-count {
-  display: block;
-  font-size: 36px;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.streak-label {
-  font-size: 13px;
-  opacity: 0.8;
-}
-
-.streak-message,
-.streak-next,
-.streak-max {
-  font-size: 12px;
-  opacity: 0.7;
-  text-align: right;
-}
-
-/* Achievements Section - Requirements 4.4 */
-.achievements-section {
-  margin-top: 8px;
-}
-
-.achievements-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--gray-700);
-  margin: 0 0 12px;
-}
-
-.no-achievements {
-  text-align: center;
-  padding: 16px;
-  background: var(--gray-50);
-  border-radius: var(--radius-md);
-  color: var(--gray-500);
-  font-size: 13px;
-}
-
-.achievements-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.achievement-badge {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 12px;
-  background: var(--gray-50);
-  border-radius: var(--radius-md);
-  min-width: 80px;
-  cursor: default;
-  transition: transform 0.2s ease;
-}
-
-.achievement-badge:hover {
-  transform: scale(1.05);
-}
-
-.badge-icon {
-  width: 40px;
-  height: 40px;
-  background: var(--gray-900);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.badge-icon svg {
-  color: #FFD700;
-}
-
-.badge-name {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--gray-700);
-  text-align: center;
-}
-
-.next-milestone {
-  margin-top: 16px;
-  padding: 12px;
-  background: var(--gray-50);
-  border-radius: var(--radius-md);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.milestone-label {
-  font-size: 12px;
-  color: var(--gray-500);
-}
-
-.milestone-value {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--gray-700);
-}
+/* Streak และ Achievements styles ถูกลบ - ลดความซับซ้อน */
 
 .logs-list { display: flex; flex-direction: column; gap: 12px; }
 .log-row { display: flex; gap: 14px; align-items: flex-start; }
@@ -1138,4 +1000,23 @@ function clearCategoryFilter() {
 
 .empty-state-icon { width: 64px; height: 64px; margin: 0 auto 16px; background: var(--gray-100); border-radius: 16px; display: flex; align-items: center; justify-content: center; }
 .empty-state-icon svg { width: 32px; height: 32px; color: var(--gray-400); }
+
+/* Validation Error - Requirements 3.3 */
+.validation-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: #FEE2E2;
+  border: 1px solid #FCA5A5;
+  border-radius: var(--radius-md);
+  color: #991B1B;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.validation-error svg {
+  flex-shrink: 0;
+  color: #DC2626;
+}
 </style>

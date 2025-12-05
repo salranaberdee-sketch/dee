@@ -8,18 +8,19 @@ export const useAuthStore = defineStore('auth', () => {
   const user = ref(null)
   const profile = ref(null)
   const loading = ref(true)
+  const isLoggingOut = ref(false) // ป้องกัน race condition ระหว่าง logout
 
   const isAuthenticated = computed(() => !!user.value)
   const isAdmin = computed(() => profile.value?.role === 'admin')
   const isCoach = computed(() => profile.value?.role === 'coach')
   const isAthlete = computed(() => profile.value?.role === 'athlete')
 
-  // Initialize auth state
+  // เริ่มต้น auth state
   async function init() {
     loading.value = true
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      if (session?.user) {
+      if (session?.user && !isLoggingOut.value) {
         user.value = session.user
         await fetchProfile()
       }
@@ -29,8 +30,13 @@ export const useAuthStore = defineStore('auth', () => {
       loading.value = false
     }
 
-    // Listen for auth changes
+    // ฟัง auth changes - ข้าม event ถ้ากำลัง logout
     supabase.auth.onAuthStateChange(async (event, session) => {
+      // ข้ามถ้ากำลัง logout เพื่อป้องกัน race condition
+      if (isLoggingOut.value) {
+        return
+      }
+      
       user.value = session?.user || null
       if (session?.user) {
         await fetchProfile()
@@ -108,52 +114,40 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function logout() {
-    console.log('🚪 เริ่มกระบวนการ logout...')
+    // ตั้ง flag ป้องกัน race condition
+    isLoggingOut.value = true
     
     // ลบ push subscription ก่อน logout (ไม่ block ถ้า error)
     if (user.value && isPushSupported()) {
       try {
         await unsubscribeFromPush(user.value.id)
-        console.log('✅ ลบ push subscription สำเร็จ')
       } catch (error) {
-        console.warn('⚠️ ไม่สามารถลบ push subscription:', error)
+        // ไม่ต้อง block logout ถ้าลบ subscription ไม่ได้
       }
     }
     
-    // ล้าง state ใน store ก่อน (สำคัญ - ทำก่อน signOut)
+    // ล้าง Supabase session ก่อน
+    try {
+      await supabase.auth.signOut({ scope: 'global' })
+    } catch (error) {
+      // ไม่ต้อง block logout
+    }
+    
+    // ล้าง state ใน store
     user.value = null
     profile.value = null
-    console.log('✅ ล้าง state สำเร็จ')
     
-    // ล้าง localStorage
+    // ล้าง localStorage และ sessionStorage
     try {
       localStorage.clear()
-      console.log('✅ ล้าง localStorage สำเร็จ')
-    } catch (error) {
-      console.warn('⚠️ ไม่สามารถล้าง localStorage:', error)
-    }
-    
-    // ล้าง sessionStorage
-    try {
       sessionStorage.clear()
-      console.log('✅ ล้าง sessionStorage สำเร็จ')
     } catch (error) {
-      console.warn('⚠️ ไม่สามารถล้าง sessionStorage:', error)
+      // ไม่ต้อง block logout
     }
     
-    // ล้าง Supabase session (ทำหลังสุด)
-    try {
-      const { error } = await supabase.auth.signOut()
-      if (error) {
-        console.warn('⚠️ Supabase signOut error:', error)
-      } else {
-        console.log('✅ Supabase signOut สำเร็จ')
-      }
-    } catch (error) {
-      console.warn('⚠️ ไม่สามารถ signOut จาก Supabase:', error)
-    }
+    // รีเซ็ต flag
+    isLoggingOut.value = false
     
-    console.log('🚪 logout เสร็จสิ้น')
     return { success: true }
   }
 

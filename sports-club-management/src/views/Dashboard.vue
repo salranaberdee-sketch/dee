@@ -27,10 +27,7 @@ const upcomingSchedules = computed(() => {
 
 const recentLogs = computed(() => data.trainingLogs.slice(0, 3))
 
-const todaySchedule = computed(() => {
-  const today = new Date().toISOString().split('T')[0]
-  return data.schedules.find(s => s.date === today)
-})
+// ลบ todaySchedule - ซ้ำซ้อนกับ Upcoming Schedule Banner
 
 const userName = computed(() => auth.profile?.name || 'ผู้ใช้')
 const userRole = computed(() => auth.profile?.role || 'athlete')
@@ -121,23 +118,16 @@ const quickActionGroups = computed(() => {
       }
     ]
   }
-  // Athlete
+  // Athlete - รวมเป็นกลุ่มเดียว เลือกเฉพาะที่ใช้บ่อย
   return [
     {
-      title: 'ของฉัน',
+      title: 'เมนูหลัก',
       actions: [
         { icon: 'chart', label: 'ผลงานของฉัน', to: '/my-performance' },
         { icon: 'clipboard', label: 'บันทึกฝึกซ้อม', to: '/training-logs' },
-        { icon: 'file', label: 'ใบสมัครของฉัน', to: '/my-applications' },
-        { icon: 'leave', label: 'ขอลา', to: '/leave-request' },
-      ]
-    },
-    {
-      title: 'กิจกรรมและการแข่งขัน',
-      actions: [
+        { icon: 'calendar', label: 'ตารางนัดหมาย', to: '/schedules' },
         { icon: 'trophy', label: 'ทัวร์นาเมนต์', to: '/tournaments' },
         { icon: 'star', label: 'กิจกรรม', to: '/events' },
-        { icon: 'calendar', label: 'ตารางนัดหมาย', to: '/schedules' },
         { icon: 'megaphone', label: 'ประกาศ', to: '/announcements' },
       ]
     }
@@ -167,17 +157,7 @@ const quickActions = computed(() => {
         @click="router.push('/schedules')"
         class="upcoming-banner-wrapper"
       />
-      <!-- Today Alert -->
-      <div v-if="todaySchedule" class="today-alert" @click="router.push('/schedules')">
-        <div class="today-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-        </div>
-        <div class="today-content">
-          <span class="today-label">วันนี้</span>
-          <span class="today-title">{{ todaySchedule.title }}</span>
-          <span class="today-time">{{ todaySchedule.time }} · {{ todaySchedule.location }}</span>
-        </div>
-      </div>
+      <!-- Today Alert ถูกลบ - ซ้ำซ้อนกับ Upcoming Schedule Banner -->
 
       <!-- Pending Applications Alert -->
       <div v-if="(auth.isAdmin || auth.isCoach) && pendingApplications > 0" class="pending-alert" @click="router.push('/club-applications')">
@@ -304,9 +284,6 @@ const quickActions = computed(() => {
             <div class="list-item-title">{{ log.activities }}</div>
             <div class="list-item-subtitle">{{ log.duration }} นาที</div>
           </div>
-          <div class="rating">
-            <span v-for="i in 5" :key="i" :class="['star', { filled: i <= log.rating }]">★</span>
-          </div>
         </div>
       </div>
     </div>
@@ -316,19 +293,7 @@ const quickActions = computed(() => {
 <style scoped>
 .greeting { font-size: 14px; color: var(--gray-500); margin-bottom: 4px; }
 
-.today-alert { 
-  display: flex; align-items: center; gap: 12px;
-  background: var(--gray-900);
-  color: white; padding: 16px; border-radius: var(--radius-lg);
-  margin-bottom: 20px; cursor: pointer;
-}
-.today-alert:active { opacity: 0.95; }
-.today-icon { width: 40px; height: 40px; background: rgba(255,255,255,0.2); border-radius: 10px; display: flex; align-items: center; justify-content: center; }
-.today-icon svg { width: 22px; height: 22px; }
-.today-content { flex: 1; }
-.today-label { display: block; font-size: 11px; opacity: 0.8; text-transform: uppercase; letter-spacing: 0.05em; }
-.today-title { display: block; font-size: 16px; font-weight: 600; margin: 2px 0; }
-.today-time { display: block; font-size: 13px; opacity: 0.9; }
+/* Today Alert styles ถูกลบ - ไม่ใช้แล้ว */
 
 .pending-alert { 
   display: flex; align-items: center; gap: 12px;
