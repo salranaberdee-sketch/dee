@@ -380,8 +380,17 @@ async function save() {
 
 async function logout() {
   if (confirm('ยืนยันออกจากระบบ?')) {
-    await auth.logout()
-    router.push('/login')
+    try {
+      console.log('🚪 กำลัง logout...')
+      await auth.logout()
+      console.log('✅ logout สำเร็จ, กำลัง redirect...')
+      // ใช้ window.location แทน router.push เพื่อ force reload
+      window.location.href = '/login'
+    } catch (error) {
+      console.error('❌ logout error:', error)
+      // ถ้า error ก็ยังพยายาม redirect
+      window.location.href = '/login'
+    }
   }
 }
 

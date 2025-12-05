@@ -108,19 +108,53 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function logout() {
-    // Remove push subscription for this device before logout (Requirement 4.2)
+    console.log('🚪 เริ่มกระบวนการ logout...')
+    
+    // ลบ push subscription ก่อน logout (ไม่ block ถ้า error)
     if (user.value && isPushSupported()) {
       try {
         await unsubscribeFromPush(user.value.id)
+        console.log('✅ ลบ push subscription สำเร็จ')
       } catch (error) {
-        console.error('Error removing push subscription on logout:', error)
-        // Continue with logout even if unsubscribe fails
+        console.warn('⚠️ ไม่สามารถลบ push subscription:', error)
       }
     }
     
-    await supabase.auth.signOut()
+    // ล้าง state ใน store ก่อน (สำคัญ - ทำก่อน signOut)
     user.value = null
     profile.value = null
+    console.log('✅ ล้าง state สำเร็จ')
+    
+    // ล้าง localStorage
+    try {
+      localStorage.clear()
+      console.log('✅ ล้าง localStorage สำเร็จ')
+    } catch (error) {
+      console.warn('⚠️ ไม่สามารถล้าง localStorage:', error)
+    }
+    
+    // ล้าง sessionStorage
+    try {
+      sessionStorage.clear()
+      console.log('✅ ล้าง sessionStorage สำเร็จ')
+    } catch (error) {
+      console.warn('⚠️ ไม่สามารถล้าง sessionStorage:', error)
+    }
+    
+    // ล้าง Supabase session (ทำหลังสุด)
+    try {
+      const { error } = await supabase.auth.signOut()
+      if (error) {
+        console.warn('⚠️ Supabase signOut error:', error)
+      } else {
+        console.log('✅ Supabase signOut สำเร็จ')
+      }
+    } catch (error) {
+      console.warn('⚠️ ไม่สามารถ signOut จาก Supabase:', error)
+    }
+    
+    console.log('🚪 logout เสร็จสิ้น')
+    return { success: true }
   }
 
   async function updateProfile(data) {

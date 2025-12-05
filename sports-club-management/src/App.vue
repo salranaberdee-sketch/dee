@@ -15,11 +15,21 @@ const data = useDataStore()
 const notificationInbox = useNotificationInboxStore()
 const isOffline = ref(!navigator.onLine)
 
-const showNav = computed(() => auth.isAuthenticated && route.name !== 'Login' && route.name !== 'AthleteRegistration')
+// ตรวจสอบว่าควรแสดง NavBar หรือไม่
+const showNav = computed(() => {
+  return auth.isAuthenticated && route.name !== 'Login' && route.name !== 'AthleteRegistration'
+})
 
 function updateOnlineStatus() {
   isOffline.value = !navigator.onLine
 }
+
+// Initialize auth on mount
+onMounted(async () => {
+  await auth.init()
+  window.addEventListener('online', updateOnlineStatus)
+  window.addEventListener('offline', updateOnlineStatus)
+})
 
 // Fetch notifications when user logs in (both old and new notification systems)
 watch(() => auth.user?.id, async (userId) => {
@@ -36,11 +46,6 @@ watch(() => auth.user?.id, async (userId) => {
     notificationInbox.reset()
   }
 }, { immediate: true })
-
-onMounted(() => {
-  window.addEventListener('online', updateOnlineStatus)
-  window.addEventListener('offline', updateOnlineStatus)
-})
 
 onUnmounted(() => {
   window.removeEventListener('online', updateOnlineStatus)
@@ -69,6 +74,7 @@ onUnmounted(() => {
     </div>
     
     <template v-else>
+      <!-- Bottom Navigation Bar -->
       <NavBar v-if="showNav" />
       <main class="main-content">
         <router-view />
