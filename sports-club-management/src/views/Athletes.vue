@@ -969,227 +969,260 @@ function exportToCSV() {
       </template>
     </Modal>
 
-    <!-- Detail Modal -->
+    <!-- Detail Modal - ปรับปรุง UI ให้ใช้งานง่ายขึ้น -->
     <Modal v-if="showDetailModal" @close="showDetailModal = false" size="large">
       <template #header>
-        <h2>ข้อมูลนักกีฬา</h2>
+        <div class="detail-modal-header">
+          <h2>ข้อมูลนักกีฬา</h2>
+          <!-- Quick Actions ย้ายมาอยู่ header -->
+          <div class="header-quick-actions">
+            <button v-if="selectedAthlete?.phone" class="btn-contact-sm" @click="callAthlete(selectedAthlete.phone, $event)" title="โทร">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/>
+              </svg>
+            </button>
+            <button class="btn-contact-sm" @click="emailAthlete(selectedAthlete?.email, $event)" title="ส่งอีเมล">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                <polyline points="22,6 12,13 2,6"/>
+              </svg>
+            </button>
+            <button v-if="canEditAthlete(selectedAthlete)" class="btn-contact-sm" @click="openEdit(selectedAthlete); showDetailModal = false" title="แก้ไข">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </button>
+          </div>
+        </div>
       </template>
       <template #body>
-        <div class="detail-content">
-          <!-- Athlete Header -->
-          <div class="detail-header">
-            <div class="avatar-container">
-              <UserAvatar :avatar-url="selectedAthlete?.user_profiles?.avatar_url" :user-name="selectedAthlete?.name || ''" size="lg" />
-              <button v-if="auth.isAdmin && selectedAthlete?.user_profiles?.avatar_url" class="btn-remove-avatar" @click.stop="removeAthleteAvatar" title="ลบรูปโปรไฟล์">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="3 6 5 6 21 6"/>
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                </svg>
-              </button>
+        <div class="detail-content-v2">
+          <!-- Profile Card - กระชับขึ้น -->
+          <div class="profile-card">
+            <div class="profile-left">
+              <div class="avatar-wrapper">
+                <UserAvatar :avatar-url="selectedAthlete?.user_profiles?.avatar_url" :user-name="selectedAthlete?.name || ''" size="lg" />
+                <button v-if="auth.isAdmin && selectedAthlete?.user_profiles?.avatar_url" class="btn-remove-avatar-sm" @click.stop="removeAthleteAvatar" title="ลบรูป">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
+              </div>
             </div>
-            <div class="detail-info">
-              <h3>{{ selectedAthlete?.name }}</h3>
-              <p>{{ selectedAthlete?.email }}</p>
-              <div class="status-actions">
-                <span :class="['status-badge', selectedAthlete?.registration_status === 'approved' ? 'status-approved' : 'status-pending']">
+            <div class="profile-right">
+              <h3 class="profile-name">{{ selectedAthlete?.name }}</h3>
+              <p class="profile-email">{{ selectedAthlete?.email }}</p>
+              <div class="profile-meta">
+                <span class="meta-club">{{ getClubName(selectedAthlete) }}</span>
+                <span class="meta-divider">|</span>
+                <span class="meta-coach">โค้ช {{ getCoachName(selectedAthlete) }}</span>
+              </div>
+              <div class="profile-status">
+                <span :class="['status-chip', selectedAthlete?.registration_status === 'approved' ? 'chip-approved' : 'chip-pending']">
+                  <svg v-if="selectedAthlete?.registration_status === 'approved'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                  <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                   {{ selectedAthlete?.registration_status === 'approved' ? 'อนุมัติแล้ว' : 'รอตรวจสอบ' }}
                 </span>
                 <template v-if="auth.isAdmin">
-                  <button v-if="selectedAthlete?.registration_status !== 'approved'" class="btn-sm btn-approve" @click="approveAthlete(selectedAthlete)">
+                  <button v-if="selectedAthlete?.registration_status !== 'approved'" class="btn-action-sm btn-approve-sm" @click="approveAthlete(selectedAthlete)">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
                     อนุมัติ
                   </button>
-                  <button v-else class="btn-sm btn-reject" @click="rejectAthlete(selectedAthlete)">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                    </svg>
-                    ยกเลิกอนุมัติ
+                  <button v-else class="btn-action-sm btn-revoke-sm" @click="rejectAthlete(selectedAthlete)">
+                    ยกเลิก
                   </button>
                 </template>
-              </div>
-              <!-- Quick Contact -->
-              <div class="quick-contact">
-                <button v-if="selectedAthlete?.phone" class="btn-contact-lg" @click="callAthlete(selectedAthlete.phone, $event)">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/>
-                  </svg>
-                  {{ selectedAthlete.phone }}
-                </button>
-                <button class="btn-contact-lg" @click="emailAthlete(selectedAthlete?.email, $event)">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-                    <polyline points="22,6 12,13 2,6"/>
-                  </svg>
-                  ส่งอีเมล
-                </button>
               </div>
             </div>
           </div>
 
-          <!-- Tabs -->
-          <div class="tabs">
-            <button :class="['tab', { active: activeTab === 'info' }]" @click="activeTab = 'info'">
+          <!-- Tabs - Pill Style -->
+          <div class="tabs-pill">
+            <button :class="['tab-pill', { active: activeTab === 'info' }]" @click="activeTab = 'info'">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
               </svg>
-              ข้อมูลส่วนตัว
+              <span class="tab-label">ข้อมูล</span>
             </button>
-            <button :class="['tab', { active: activeTab === 'documents' }]" @click="activeTab = 'documents'">
+            <button :class="['tab-pill', { active: activeTab === 'documents' }]" @click="activeTab = 'documents'">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
                 <polyline points="14 2 14 8 20 8"/>
               </svg>
-              เอกสาร ({{ athleteDocuments.length }})
+              <span class="tab-label">เอกสาร</span>
+              <span v-if="athleteDocuments.length > 0" class="tab-badge">{{ athleteDocuments.length }}</span>
             </button>
-            <button :class="['tab', { active: activeTab === 'history' }]" @click="activeTab = 'history'">
+            <button :class="['tab-pill', { active: activeTab === 'history' }]" @click="activeTab = 'history'">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M6 9H4.5a2.5 2.5 0 010-5H6M18 9h1.5a2.5 2.5 0 000-5H18M4 22h16M18 2H6v7a6 6 0 0012 0V2z"/>
               </svg>
-              ประวัติแข่งขัน
+              <span class="tab-label">ประวัติ</span>
             </button>
-            <button :class="['tab', { active: activeTab === 'albums' }]" @click="activeTab = 'albums'">
+            <button :class="['tab-pill', { active: activeTab === 'albums' }]" @click="activeTab = 'albums'">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
                 <circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
               </svg>
-              อัลบั้มรูปภาพ
+              <span class="tab-label">อัลบั้ม</span>
             </button>
-            <button v-if="auth.isCoach || auth.isAdmin" :class="['tab', { active: activeTab === 'training' }]" @click="activeTab = 'training'">
+            <button v-if="auth.isCoach || auth.isAdmin" :class="['tab-pill', { active: activeTab === 'training' }]" @click="activeTab = 'training'">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/>
                 <rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 14l2 2 4-4"/>
               </svg>
-              สถิติการฝึก
+              <span class="tab-label">สถิติ</span>
             </button>
           </div>
 
-          <!-- Info Tab -->
-          <div v-if="activeTab === 'info'" class="tab-content">
-            <div class="info-grid">
-              <div class="info-item">
-                <span class="label">ชมรม</span>
-                <span class="value">{{ getClubName(selectedAthlete) }}</span>
-              </div>
-              <div class="info-item">
-                <span class="label">โค้ช</span>
-                <span class="value">{{ getCoachName(selectedAthlete) }}</span>
-              </div>
-              <div class="info-item">
-                <span class="label">เบอร์โทร</span>
-                <span class="value">{{ selectedAthlete?.phone || '-' }}</span>
-              </div>
-              <div class="info-item">
-                <span class="label">วันเกิด</span>
-                <span class="value">{{ formatDate(selectedAthlete?.birth_date) }}</span>
-              </div>
-              <div class="info-item">
-                <span class="label">อายุ</span>
-                <span class="value">{{ formatAge(selectedAthlete?.birth_date) }}</span>
-              </div>
-              <div class="info-item">
-                <span class="label">กรุ๊ปเลือด</span>
-                <span class="value">{{ selectedAthlete?.blood_type || '-' }}</span>
-              </div>
-              <div class="info-item full">
-                <span class="label">ที่อยู่</span>
-                <span class="value">{{ selectedAthlete?.address || '-' }}</span>
-              </div>
-              <div class="info-item">
-                <span class="label">เบอร์ฉุกเฉิน</span>
-                <span class="value">{{ selectedAthlete?.emergency_phone || '-' }}</span>
+          <!-- Info Tab - แบ่งเป็น sections -->
+          <div v-if="activeTab === 'info'" class="tab-content-v2">
+            <!-- ข้อมูลติดต่อ -->
+            <div class="info-section">
+              <h4 class="section-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/>
+                </svg>
+                ข้อมูลติดต่อ
+              </h4>
+              <div class="info-grid-v2">
+                <div class="info-cell">
+                  <span class="cell-label">เบอร์โทร</span>
+                  <span class="cell-value">{{ selectedAthlete?.phone || '-' }}</span>
+                </div>
+                <div class="info-cell">
+                  <span class="cell-label">เบอร์ฉุกเฉิน</span>
+                  <span class="cell-value">{{ selectedAthlete?.emergency_phone || '-' }}</span>
+                </div>
+                <div class="info-cell full-width">
+                  <span class="cell-label">ที่อยู่</span>
+                  <span class="cell-value">{{ selectedAthlete?.address || '-' }}</span>
+                </div>
               </div>
             </div>
 
-            <!-- Parent Info -->
-            <div v-if="selectedAthlete?.parent_name" class="parent-section">
-              <h4>ข้อมูลผู้ปกครอง</h4>
-              <div class="info-grid">
-                <div class="info-item">
-                  <span class="label">ชื่อผู้ปกครอง</span>
-                  <span class="value">{{ selectedAthlete?.parent_name }}</span>
+            <!-- ข้อมูลส่วนตัว -->
+            <div class="info-section">
+              <h4 class="section-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                </svg>
+                ข้อมูลส่วนตัว
+              </h4>
+              <div class="info-grid-v2">
+                <div class="info-cell">
+                  <span class="cell-label">วันเกิด</span>
+                  <span class="cell-value">{{ formatDate(selectedAthlete?.birth_date) }}</span>
                 </div>
-                <div class="info-item">
-                  <span class="label">ความสัมพันธ์</span>
-                  <span class="value">{{ selectedAthlete?.parent_relation || '-' }}</span>
+                <div class="info-cell">
+                  <span class="cell-label">อายุ</span>
+                  <span class="cell-value">{{ formatAge(selectedAthlete?.birth_date) }}</span>
                 </div>
-                <div class="info-item">
-                  <span class="label">เบอร์โทรผู้ปกครอง</span>
-                  <span class="value">{{ selectedAthlete?.parent_phone || '-' }}</span>
+                <div class="info-cell">
+                  <span class="cell-label">กรุ๊ปเลือด</span>
+                  <span class="cell-value highlight">{{ selectedAthlete?.blood_type || '-' }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- ข้อมูลผู้ปกครอง -->
+            <div v-if="selectedAthlete?.parent_name" class="info-section">
+              <h4 class="section-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                  <path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75"/>
+                </svg>
+                ข้อมูลผู้ปกครอง
+              </h4>
+              <div class="info-grid-v2">
+                <div class="info-cell">
+                  <span class="cell-label">ชื่อผู้ปกครอง</span>
+                  <span class="cell-value">{{ selectedAthlete?.parent_name }}</span>
+                </div>
+                <div class="info-cell">
+                  <span class="cell-label">ความสัมพันธ์</span>
+                  <span class="cell-value">{{ selectedAthlete?.parent_relation || '-' }}</span>
+                </div>
+                <div class="info-cell">
+                  <span class="cell-label">เบอร์โทร</span>
+                  <span class="cell-value">{{ selectedAthlete?.parent_phone || '-' }}</span>
                 </div>
               </div>
             </div>
           </div>
 
           <!-- Documents Tab -->
-          <div v-if="activeTab === 'documents'" class="tab-content">
-            <div v-if="loadingDocs" class="loading">กำลังโหลดเอกสาร...</div>
-            <div v-else-if="athleteDocuments.length === 0" class="empty-docs">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-                <polyline points="14 2 14 8 20 8"/>
+          <!-- Documents Tab -->
+          <div v-if="activeTab === 'documents'" class="tab-content-v2">
+            <div v-if="loadingDocs" class="loading-v2">
+              <svg class="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="32"/>
               </svg>
+              กำลังโหลดเอกสาร...
+            </div>
+            <div v-else-if="athleteDocuments.length === 0" class="empty-state-v2">
+              <div class="empty-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                </svg>
+              </div>
               <p>ยังไม่มีเอกสาร</p>
             </div>
-            <div v-else class="documents-list">
-              <div v-for="doc in athleteDocuments" :key="doc.id" class="document-item">
-                <div class="doc-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-                    <polyline points="14 2 14 8 20 8"/>
-                  </svg>
-                </div>
-                <div class="doc-info">
-                  <div class="doc-type">{{ documentTypes[doc.document_type] || doc.document_type }}</div>
-                  <div class="doc-meta">
-                    <span>{{ doc.file_name || 'ไม่ระบุชื่อไฟล์' }}</span>
-                    <span>อัพโหลด: {{ formatDate(doc.uploaded_at) }}</span>
+            <div v-else class="documents-grid">
+              <div v-for="doc in athleteDocuments" :key="doc.id" class="doc-card">
+                <div class="doc-card-header">
+                  <div class="doc-icon-sm">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                      <polyline points="14 2 14 8 20 8"/>
+                    </svg>
                   </div>
-                </div>
-                <div class="doc-actions">
-                  <span v-if="doc.verified" class="verified-badge">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M22 11.08V12a10 10 0 11-5.93-9.14"/>
-                      <polyline points="22 4 12 14.01 9 11.01"/>
-                    </svg>
-                    ยืนยันแล้ว
+                  <span v-if="doc.verified" class="verified-chip">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
                   </span>
-                  <button v-else-if="auth.isAdmin" class="btn-sm btn-verify" @click="verifyDocument(doc)">ยืนยันเอกสาร</button>
-                  <a v-if="doc.file_url" :href="doc.file_url" target="_blank" class="btn-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/>
-                      <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
-                    </svg>
-                  </a>
+                </div>
+                <div class="doc-card-body">
+                  <div class="doc-name">{{ documentTypes[doc.document_type] || doc.document_type }}</div>
+                  <div class="doc-date">{{ formatDate(doc.uploaded_at) }}</div>
+                </div>
+                <div class="doc-card-footer">
+                  <a v-if="doc.file_url" :href="doc.file_url" target="_blank" class="btn-view-doc">ดูเอกสาร</a>
+                  <button v-if="!doc.verified && auth.isAdmin" class="btn-verify-sm" @click="verifyDocument(doc)">ยืนยัน</button>
                 </div>
               </div>
             </div>
           </div>
 
           <!-- History Tab -->
-          <div v-if="activeTab === 'history'" class="tab-content">
+          <div v-if="activeTab === 'history'" class="tab-content-v2">
             <AthleteHistory v-if="selectedAthlete" :athlete-id="selectedAthlete.id" />
           </div>
 
           <!-- Albums Tab -->
-          <div v-if="activeTab === 'albums'" class="tab-content">
+          <div v-if="activeTab === 'albums'" class="tab-content-v2">
             <AlbumSection v-if="selectedAthlete?.user_id" :user-id="selectedAthlete.user_id" :read-only="true" />
-            <div v-else class="empty-docs">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                <circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
-              </svg>
+            <div v-else class="empty-state-v2">
+              <div class="empty-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                  <circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+                </svg>
+              </div>
               <p>ไม่พบข้อมูลอัลบั้ม</p>
             </div>
           </div>
 
           <!-- Training Stats Tab -->
-          <div v-if="activeTab === 'training'" class="tab-content">
+          <div v-if="activeTab === 'training'" class="tab-content-v2">
             <AthleteTrainingStats v-if="selectedAthlete?.user_id" :athlete-id="selectedAthlete.id" :user-id="selectedAthlete.user_id" />
-            <div v-else class="empty-docs">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/>
-                <rect x="8" y="2" width="8" height="4" rx="1"/>
-              </svg>
+            <div v-else class="empty-state-v2">
+              <div class="empty-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/>
+                  <rect x="8" y="2" width="8" height="4" rx="1"/>
+                </svg>
+              </div>
               <p>ไม่พบข้อมูลสถิติการฝึก</p>
             </div>
           </div>
@@ -2466,6 +2499,422 @@ function exportToCSV() {
 
 .btn-reject:hover { background: #FEF2F2; }
 .btn-reject svg { width: 14px; height: 14px; }
+
+/* ========== Detail Modal V2 Styles ========== */
+
+/* Header ใหม่ */
+.detail-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.detail-modal-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.header-quick-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-contact-sm {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid #E5E5E5;
+  background: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.btn-contact-sm svg { width: 18px; height: 18px; color: #525252; }
+.btn-contact-sm:hover { background: #F5F5F5; border-color: #D4D4D4; }
+
+/* Profile Card */
+.detail-content-v2 { padding: 0; }
+
+.profile-card {
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+  background: #FAFAFA;
+  border-radius: 12px;
+  margin-bottom: 20px;
+}
+
+.profile-left { flex-shrink: 0; }
+
+.avatar-wrapper { position: relative; }
+
+.btn-remove-avatar-sm {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #EF4444;
+  border: 2px solid #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-remove-avatar-sm svg { width: 12px; height: 12px; color: #fff; }
+
+.profile-right { flex: 1; min-width: 0; }
+
+.profile-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: #171717;
+  margin: 0 0 2px;
+}
+
+.profile-email {
+  font-size: 13px;
+  color: #737373;
+  margin: 0 0 8px;
+}
+
+.profile-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #525252;
+  margin-bottom: 12px;
+}
+
+.meta-divider { color: #D4D4D4; }
+
+.profile-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-chip svg { width: 14px; height: 14px; }
+
+.chip-approved { background: #D1FAE5; color: #065F46; }
+.chip-pending { background: #FEF3C7; color: #92400E; }
+
+.btn-action-sm {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  border: none;
+}
+
+.btn-action-sm svg { width: 14px; height: 14px; }
+
+.btn-approve-sm { background: #22C55E; color: #fff; }
+.btn-approve-sm:hover { background: #16A34A; }
+
+.btn-revoke-sm { background: #fff; color: #737373; border: 1px solid #E5E5E5; }
+.btn-revoke-sm:hover { background: #F5F5F5; }
+
+/* Tabs Pill Style */
+.tabs-pill {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  background: #F5F5F5;
+  border-radius: 10px;
+  margin-bottom: 20px;
+  overflow-x: auto;
+}
+
+.tab-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: #737373;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.tab-pill svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+.tab-pill.active {
+  background: #fff;
+  color: #171717;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.tab-pill:hover:not(.active) { color: #171717; }
+
+.tab-badge {
+  background: #171717;
+  color: #fff;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  min-width: 18px;
+  text-align: center;
+}
+
+/* Tab Content V2 */
+.tab-content-v2 { min-height: 200px; }
+
+/* Info Sections */
+.info-section {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #F5F5F5;
+}
+
+.info-section:last-child { border-bottom: none; margin-bottom: 0; }
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #171717;
+  margin: 0 0 12px;
+}
+
+.section-title svg { width: 18px; height: 18px; color: #737373; }
+
+.info-grid-v2 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.info-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.info-cell.full-width { grid-column: 1 / -1; }
+
+.cell-label {
+  font-size: 11px;
+  color: #A3A3A3;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.cell-value {
+  font-size: 14px;
+  color: #171717;
+  font-weight: 500;
+}
+
+.cell-value.highlight {
+  display: inline-flex;
+  background: #FEF3C7;
+  color: #92400E;
+  padding: 2px 8px;
+  border-radius: 4px;
+  width: fit-content;
+}
+
+/* Documents Grid */
+.documents-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.doc-card {
+  background: #fff;
+  border: 1px solid #E5E5E5;
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.doc-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.doc-icon-sm {
+  width: 36px;
+  height: 36px;
+  background: #171717;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.doc-icon-sm svg { width: 18px; height: 18px; color: #fff; }
+
+.verified-chip {
+  width: 20px;
+  height: 20px;
+  background: #22C55E;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.verified-chip svg { width: 12px; height: 12px; color: #fff; }
+
+.doc-card-body { flex: 1; }
+
+.doc-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #171717;
+  margin-bottom: 2px;
+}
+
+.doc-date { font-size: 11px; color: #A3A3A3; }
+
+.doc-card-footer {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-view-doc {
+  flex: 1;
+  padding: 6px 10px;
+  background: #F5F5F5;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #525252;
+  text-decoration: none;
+  text-align: center;
+  cursor: pointer;
+}
+
+.btn-view-doc:hover { background: #E5E5E5; }
+
+.btn-verify-sm {
+  padding: 6px 10px;
+  background: #171717;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.btn-verify-sm:hover { background: #262626; }
+
+/* Empty State V2 */
+.empty-state-v2 {
+  text-align: center;
+  padding: 40px 20px;
+  color: #A3A3A3;
+}
+
+.empty-icon {
+  width: 56px;
+  height: 56px;
+  background: #F5F5F5;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 12px;
+}
+
+.empty-icon svg { width: 28px; height: 28px; color: #A3A3A3; }
+
+.empty-state-v2 p { margin: 0; font-size: 14px; }
+
+/* Loading V2 */
+.loading-v2 {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px;
+  color: #737373;
+  font-size: 14px;
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Responsive Detail Modal V2 */
+@media (max-width: 640px) {
+  .profile-card {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  
+  .profile-meta {
+    justify-content: center;
+  }
+  
+  .profile-status {
+    justify-content: center;
+  }
+  
+  .tabs-pill {
+    justify-content: flex-start;
+    padding: 3px;
+  }
+  
+  .tab-pill {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  
+  .tab-label { display: none; }
+  
+  .tab-pill svg { width: 18px; height: 18px; }
+  
+  .info-grid-v2 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .documents-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
 
 /* Form */
 .form {

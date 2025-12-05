@@ -1,3 +1,4 @@
 {
-    "editor.fontSize": 9
+    "editor.fontSize": 9,
+    "editor.experimental.treeSitterTelemetry": true
 }
