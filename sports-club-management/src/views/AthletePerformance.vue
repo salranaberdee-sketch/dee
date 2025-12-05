@@ -74,7 +74,7 @@
       <div class="score-breakdown-section" v-if="scoreBreakdown">
         <h2>รายละเอียดคะแนน</h2>
         <ScoreBreakdownCard 
-          :score-breakdown="scoreBreakdown"
+          :score-result="scoreBreakdown"
           :show-no-conditions-message="true"
         />
       </div>
@@ -838,7 +838,6 @@ async function loadData() {
       .eq('athlete_id', athleteId.value)
       .gte('events.event_date', monthStart)
       .lte('events.event_date', endDate)
-      .order('events.event_date', { ascending: false })
 
     // Event checkins
     const { data: eventCheckins } = await supabase
@@ -859,7 +858,6 @@ async function loadData() {
       .eq('athlete_id', athleteId.value)
       .gte('events.event_date', monthStart)
       .lte('events.event_date', endDate)
-      .order('events.event_date', { ascending: false })
 
     // รวมข้อมูล events (registrations + checkins)
     const eventMap = new Map()
