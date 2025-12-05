@@ -71,7 +71,7 @@
       </div>
 
       <!-- Score Breakdown Card - Requirement 8.5 -->
-      <div class="score-breakdown-section" v-if="scoreBreakdown">
+      <div class="score-breakdown-section" v-if="scoreBreakdown && scoreBreakdown.categoryScores">
         <h2>รายละเอียดคะแนน</h2>
         <ScoreBreakdownCard 
           :score-result="scoreBreakdown"
