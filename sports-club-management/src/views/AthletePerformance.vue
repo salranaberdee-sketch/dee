@@ -83,7 +83,7 @@
 
       <!-- Score Breakdown Card - Requirement 8.5 -->
       <div class="score-breakdown-section" v-if="scoreBreakdown && scoreBreakdown.categoryScores">
-        <h2>รายละเอียดคะแนน</h2>
+        <h3 class="subsection-title">รายละเอียดคะแนน</h3>
         <ScoreBreakdownCard 
           :score-result="scoreBreakdown"
           :show-no-conditions-message="true"
@@ -331,7 +331,7 @@
 
       <!-- Action Suggestions -->
       <div class="action-section" v-if="suggestions.length > 0">
-        <h2>สิ่งที่ควรทำเพื่อเพิ่มคะแนน</h2>
+        <h3 class="subsection-title">สิ่งที่ควรทำเพื่อเพิ่มคะแนน</h3>
         <div class="suggestion-list">
           <div v-for="(suggestion, index) in suggestions" :key="index" class="suggestion-item">
             <div class="suggestion-icon" :class="suggestion.type">
