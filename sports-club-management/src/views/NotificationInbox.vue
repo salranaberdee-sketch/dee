@@ -122,8 +122,8 @@ async function handleNotificationClick(notification) {
     return 
   }
   
-  // Mark as read automatically (Requirement 6.3)
-  if (!notification.read_at) {
+  // ทำเครื่องหมายว่าอ่านแล้วอัตโนมัติ (Requirement 6.3)
+  if (!notification.is_read) {
     await notificationInbox.markAsRead(notification.id)
   }
   

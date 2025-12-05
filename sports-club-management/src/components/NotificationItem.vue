@@ -17,8 +17,8 @@ const props = defineProps({
 
 const emit = defineEmits(['click', 'markRead', 'markUnread', 'delete'])
 
-// Check if notification is unread
-const isUnread = computed(() => !props.notification.read_at)
+// ตรวจสอบว่ายังไม่ได้อ่าน
+const isUnread = computed(() => !props.notification.is_read)
 
 // Format relative time (e.g., "2 hours ago")
 function formatRelativeTime(dateStr) {

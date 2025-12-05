@@ -415,7 +415,7 @@ export const useDataStore = defineStore('data', () => {
     loading.value = true
     const { data, error: err } = await supabase
       .from('training_logs')
-      .select('*, athletes(name), coaches(name), clubs(name), activity_categories(id, name, icon)')
+      .select('*, athletes(name), coaches(name), clubs(name)')
       .order('date', { ascending: false })
     
     if (!err) trainingLogs.value = data || []
@@ -427,7 +427,7 @@ export const useDataStore = defineStore('data', () => {
     const { data, error: err } = await supabase
       .from('training_logs')
       .insert(log)
-      .select('*, athletes(name), coaches(name), clubs(name), activity_categories(id, name, icon)')
+      .select('*, athletes(name), coaches(name), clubs(name)')
       .single()
     
     if (!err && data) {
@@ -442,7 +442,7 @@ export const useDataStore = defineStore('data', () => {
       .from('training_logs')
       .update({ ...updates, updated_at: new Date().toISOString() })
       .eq('id', id)
-      .select('*, athletes(name), coaches(name), clubs(name), activity_categories(id, name, icon)')
+      .select('*, athletes(name), coaches(name), clubs(name)')
       .single()
     
     if (!err && data) {
@@ -463,121 +463,51 @@ export const useDataStore = defineStore('data', () => {
   }
 
   // ============ ACTIVITY CATEGORIES ============
-  // Requirements: 1.4, 6.2, 6.3
+  // NOTE: ตาราง activity_categories ยังไม่ได้สร้าง - ฟังก์ชันเหล่านี้ return stub values
 
   /**
-   * Fetch active activity categories
-   * @returns {Promise<Array>} Categories array sorted by sort_order
+   * ดึงหมวดหมู่กิจกรรมที่ใช้งานอยู่
+   * @returns {Promise<Array>} - array ว่าง (รอสร้างตาราง)
    */
   async function fetchActivityCategories() {
-    const { data, error: err } = await supabase
-      .from('activity_categories')
-      .select('*')
-      .eq('is_active', true)
-      .order('sort_order', { ascending: true })
-    
-    if (!err) activityCategories.value = data || []
-    else error.value = err.message
-    return activityCategories.value
-  }
-
-  /**
-   * Fetch all activity categories (including inactive) - Admin only
-   * @returns {Promise<Array>} All categories array
-   */
-  async function fetchAllActivityCategories() {
-    const { data, error: err } = await supabase
-      .from('activity_categories')
-      .select('*')
-      .order('sort_order', { ascending: true })
-    
-    if (!err) return data || []
+    // TODO: สร้างตาราง activity_categories
+    activityCategories.value = []
     return []
   }
 
   /**
-   * Add a new activity category - Admin only
-   * @param {Object} categoryData - { name, icon?, sort_order? }
-   * @returns {Promise<{success: boolean, data?: Object, message?: string}>}
+   * ดึงหมวดหมู่กิจกรรมทั้งหมด - Admin only
+   * @returns {Promise<Array>} - array ว่าง (รอสร้างตาราง)
+   */
+  async function fetchAllActivityCategories() {
+    // TODO: สร้างตาราง activity_categories
+    return []
+  }
+
+  /**
+   * เพิ่มหมวดหมู่กิจกรรมใหม่ - Admin only
+   * @returns {Promise<{success: boolean, message: string}>}
    */
   async function addActivityCategory(categoryData) {
-    if (!categoryData.name || categoryData.name.trim() === '') {
-      return { success: false, message: 'กรุณาระบุชื่อหมวดหมู่' }
-    }
-
-    const payload = {
-      name: categoryData.name.trim(),
-      icon: categoryData.icon || null,
-      sort_order: categoryData.sort_order || 0,
-      is_active: true
-    }
-
-    const { data, error: err } = await supabase
-      .from('activity_categories')
-      .insert(payload)
-      .select()
-      .single()
-    
-    if (!err && data) {
-      activityCategories.value.push(data)
-      activityCategories.value.sort((a, b) => a.sort_order - b.sort_order)
-      return { success: true, data }
-    }
-    return { success: false, message: err?.message }
+    // TODO: สร้างตาราง activity_categories
+    return { success: false, message: 'ฟีเจอร์นี้ยังไม่พร้อมใช้งาน' }
   }
 
   /**
-   * Update an activity category - Admin only
-   * Requirement 6.3: Deactivating preserves existing logs
-   * @param {string} id - Category ID
-   * @param {Object} updates - { name?, icon?, sort_order?, is_active? }
-   * @returns {Promise<{success: boolean, message?: string}>}
+   * อัพเดทหมวดหมู่กิจกรรม - Admin only
+   * @returns {Promise<{success: boolean, message: string}>}
    */
   async function updateActivityCategory(id, updates) {
-    if (updates.name !== undefined && (!updates.name || updates.name.trim() === '')) {
-      return { success: false, message: 'กรุณาระบุชื่อหมวดหมู่' }
-    }
-
-    const payload = {}
-    if (updates.name !== undefined) payload.name = updates.name.trim()
-    if (updates.icon !== undefined) payload.icon = updates.icon
-    if (updates.sort_order !== undefined) payload.sort_order = updates.sort_order
-    if (updates.is_active !== undefined) payload.is_active = updates.is_active
-
-    const { data, error: err } = await supabase
-      .from('activity_categories')
-      .update(payload)
-      .eq('id', id)
-      .select()
-      .single()
-    
-    if (!err && data) {
-      // Update local state
-      const idx = activityCategories.value.findIndex(c => c.id === id)
-      if (idx !== -1) {
-        if (data.is_active) {
-          activityCategories.value[idx] = data
-        } else {
-          // Remove from active list if deactivated
-          activityCategories.value.splice(idx, 1)
-        }
-      } else if (data.is_active) {
-        // Add to list if reactivated
-        activityCategories.value.push(data)
-      }
-      activityCategories.value.sort((a, b) => a.sort_order - b.sort_order)
-      return { success: true, data }
-    }
-    return { success: false, message: err?.message }
+    // TODO: สร้างตาราง activity_categories
+    return { success: false, message: 'ฟีเจอร์นี้ยังไม่พร้อมใช้งาน' }
   }
 
   /**
-   * Get category by ID
-   * @param {string} id - Category ID
-   * @returns {Object|undefined} Category object
+   * ดึงหมวดหมู่ตาม ID
+   * @returns {undefined}
    */
   function getCategoryById(id) {
-    return activityCategories.value.find(c => c.id === id)
+    return undefined
   }
 
   /**
@@ -681,60 +611,15 @@ export const useDataStore = defineStore('data', () => {
   }
 
   /**
-   * Get training distribution by category
-   * @param {string} userId - User ID
-   * @param {Object} dateRange - Optional { startDate, endDate }
-   * @returns {Promise<Array<{categoryId: string, categoryName: string, count: number, percentage: number}>>}
+   * ดึงข้อมูลการกระจายการฝึกซ้อมตามหมวดหมู่
+   * NOTE: ตาราง activity_categories ยังไม่ได้สร้าง - return empty array
+   * @param {string} userId - รหัสผู้ใช้
+   * @param {Object} dateRange - ช่วงวันที่ (optional)
+   * @returns {Promise<Array>} - array ว่าง (รอสร้างตาราง activity_categories)
    */
   async function getCategoryDistribution(userId, dateRange = {}) {
-    let query = supabase
-      .from('training_logs')
-      .select('category_id, activity_categories(id, name, icon)')
-      .eq('user_id', userId)
-    
-    if (dateRange.startDate) {
-      query = query.gte('date', dateRange.startDate)
-    }
-    if (dateRange.endDate) {
-      query = query.lte('date', dateRange.endDate)
-    }
-
-    const { data, error: err } = await query
-
-    if (err || !data || data.length === 0) {
-      return []
-    }
-
-    // Group by category
-    const categoryMap = new Map()
-    data.forEach(log => {
-      const catId = log.category_id || 'uncategorized'
-      const catName = log.activity_categories?.name || 'ไม่ระบุหมวดหมู่'
-      const catIcon = log.activity_categories?.icon || null
-      
-      if (categoryMap.has(catId)) {
-        categoryMap.get(catId).count++
-      } else {
-        categoryMap.set(catId, {
-          categoryId: catId,
-          categoryName: catName,
-          categoryIcon: catIcon,
-          count: 1
-        })
-      }
-    })
-
-    // Calculate percentages and convert to array
-    const total = data.length
-    const distribution = Array.from(categoryMap.values()).map(cat => ({
-      ...cat,
-      percentage: Math.round((cat.count / total) * 100)
-    }))
-
-    // Sort by count descending
-    distribution.sort((a, b) => b.count - a.count)
-
-    return distribution
+    // TODO: สร้างตาราง activity_categories และเพิ่ม category_id ใน training_logs
+    return []
   }
 
   /**
@@ -2089,7 +1974,7 @@ export const useDataStore = defineStore('data', () => {
     loading.value = true
     let query = supabase
       .from('club_applications')
-      .select('*, athletes(id, name, email, phone, birth_date), clubs(id, name, sport), reviewer:reviewed_by(id, name)')
+      .select('*, athletes(id, name, email, phone, birth_date), clubs(id, name, sport)')
       .order('applied_at', { ascending: false })
     
     if (filters.clubId) query = query.eq('club_id', filters.clubId)

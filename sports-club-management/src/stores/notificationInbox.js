@@ -81,9 +81,9 @@ export const useNotificationInboxStore = defineStore('notificationInbox', () => 
       // Calculate offset for pagination
       const offset = (page - 1) * PAGE_SIZE
 
-      // Build query
+      // Build query - ใช้ตาราง notifications แทน notification_history
       let query = supabase
-        .from('notification_history')
+        .from('notifications')
         .select('*', { count: 'exact' })
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
@@ -151,11 +151,12 @@ export const useNotificationInboxStore = defineStore('notificationInbox', () => 
     if (!userId) return 0
 
     try {
+      // ใช้ตาราง notifications และ is_read แทน read_at
       const { count, error: countError } = await supabase
-        .from('notification_history')
+        .from('notifications')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', userId)
-        .is('read_at', null)
+        .eq('is_read', false)
 
       if (countError) {
         console.error('Error fetching unread count:', countError)
@@ -185,11 +186,12 @@ export const useNotificationInboxStore = defineStore('notificationInbox', () => 
     }
 
     try {
+      // ใช้ is_read แทน read_at
       const { data, error: updateError } = await supabase
-        .from('notification_history')
-        .update({ read_at: new Date().toISOString() })
+        .from('notifications')
+        .update({ is_read: true })
         .eq('id', notificationId)
-        .is('read_at', null) // Only update if currently unread
+        .eq('is_read', false) // อัพเดทเฉพาะที่ยังไม่อ่าน
         .select()
         .single()
 
@@ -232,11 +234,12 @@ export const useNotificationInboxStore = defineStore('notificationInbox', () => 
     }
 
     try {
+      // ใช้ is_read แทน read_at
       const { data, error: updateError } = await supabase
-        .from('notification_history')
-        .update({ read_at: null })
+        .from('notifications')
+        .update({ is_read: false })
         .eq('id', notificationId)
-        .not('read_at', 'is', null) // Only update if currently read
+        .eq('is_read', true) // อัพเดทเฉพาะที่อ่านแล้ว
         .select()
         .single()
 
@@ -277,21 +280,21 @@ export const useNotificationInboxStore = defineStore('notificationInbox', () => 
     }
 
     try {
+      // ใช้ is_read แทน read_at
       const { error: updateError } = await supabase
-        .from('notification_history')
-        .update({ read_at: new Date().toISOString() })
+        .from('notifications')
+        .update({ is_read: true })
         .eq('user_id', userId)
-        .is('read_at', null)
+        .eq('is_read', false)
 
       if (updateError) {
         return { success: false, error: updateError.message }
       }
 
-      // Update local state - mark all as read
-      const now = new Date().toISOString()
+      // อัพเดท local state - ทำเครื่องหมายว่าอ่านแล้วทั้งหมด
       notifications.value = notifications.value.map(n => ({
         ...n,
-        read_at: n.read_at || now
+        is_read: true
       }))
 
       // Reset unread count
@@ -317,12 +320,12 @@ export const useNotificationInboxStore = defineStore('notificationInbox', () => 
     }
 
     try {
-      // Check if notification was unread before deleting
+      // ตรวจสอบว่า notification ยังไม่ได้อ่านก่อนลบ
       const notification = notifications.value.find(n => n.id === notificationId)
-      const wasUnread = notification && !notification.read_at
+      const wasUnread = notification && !notification.is_read
 
       const { error: deleteError } = await supabase
-        .from('notification_history')
+        .from('notifications')
         .delete()
         .eq('id', notificationId)
 
@@ -358,13 +361,13 @@ export const useNotificationInboxStore = defineStore('notificationInbox', () => 
     }
 
     try {
-      // Count unread notifications being deleted
+      // นับจำนวน notifications ที่ยังไม่ได้อ่านที่จะถูกลบ
       const unreadBeingDeleted = notifications.value.filter(
-        n => notificationIds.includes(n.id) && !n.read_at
+        n => notificationIds.includes(n.id) && !n.is_read
       ).length
 
       const { error: deleteError } = await supabase
-        .from('notification_history')
+        .from('notifications')
         .delete()
         .in('id', notificationIds)
 
@@ -400,7 +403,7 @@ export const useNotificationInboxStore = defineStore('notificationInbox', () => 
 
     try {
       const { error: deleteError } = await supabase
-        .from('notification_history')
+        .from('notifications')
         .delete()
         .eq('user_id', userId)
 
@@ -408,14 +411,14 @@ export const useNotificationInboxStore = defineStore('notificationInbox', () => 
         return { success: false, error: deleteError.message }
       }
 
-      // Clear local state
+      // ล้าง local state
       notifications.value = []
       unreadCount.value = 0
       hasMore.value = false
 
       return { success: true }
     } catch (err) {
-      return { success: false, error: err.message || 'Failed to clear notifications' }
+      return { success: false, error: err.message || 'ไม่สามารถล้างการแจ้งเตือนได้' }
     }
   }
 
@@ -432,7 +435,7 @@ export const useNotificationInboxStore = defineStore('notificationInbox', () => 
     // Unsubscribe from existing subscription
     unsubscribeFromRealtime()
 
-    // Create new subscription
+    // สร้าง subscription ใหม่ - ใช้ตาราง notifications
     realtimeSubscription = supabase
       .channel(`notification-inbox-${userId}`)
       .on(
@@ -440,26 +443,26 @@ export const useNotificationInboxStore = defineStore('notificationInbox', () => 
         {
           event: 'INSERT',
           schema: 'public',
-          table: 'notification_history',
+          table: 'notifications',
           filter: `user_id=eq.${userId}`
         },
         (payload) => {
-          // Add new notification to the top of the list
+          // เพิ่ม notification ใหม่ไว้ด้านบนสุด
           const newNotification = payload.new
           
-          // Check if notification already exists (avoid duplicates)
+          // ตรวจสอบว่ามีอยู่แล้วหรือไม่ (หลีกเลี่ยง duplicates)
           const exists = notifications.value.some(n => n.id === newNotification.id)
           if (!exists) {
             notifications.value.unshift(newNotification)
             
-            // Increment unread count if notification is unread
-            if (!newNotification.read_at) {
+            // เพิ่ม unread count ถ้ายังไม่ได้อ่าน
+            if (!newNotification.is_read) {
               unreadCount.value++
             }
             
-            // Add to IndexedDB cache
+            // เพิ่มลง IndexedDB cache
             addNotificationToCache(newNotification).catch(err => {
-              console.warn('Failed to cache new notification:', err)
+              console.warn('ไม่สามารถ cache notification ใหม่ได้:', err)
             })
           }
         }
@@ -469,33 +472,33 @@ export const useNotificationInboxStore = defineStore('notificationInbox', () => 
         {
           event: 'UPDATE',
           schema: 'public',
-          table: 'notification_history',
+          table: 'notifications',
           filter: `user_id=eq.${userId}`
         },
         (payload) => {
-          // Update notification in local state
+          // อัพเดท notification ใน local state
           const updatedNotification = payload.new
           const oldNotification = payload.old
           
           const idx = notifications.value.findIndex(n => n.id === updatedNotification.id)
           if (idx !== -1) {
-            // Check if read status changed
-            const wasUnread = !oldNotification.read_at
-            const isNowUnread = !updatedNotification.read_at
+            // ตรวจสอบว่าสถานะการอ่านเปลี่ยนหรือไม่
+            const wasUnread = !oldNotification.is_read
+            const isNowUnread = !updatedNotification.is_read
             
             if (wasUnread && !isNowUnread) {
-              // Was unread, now read - decrement count
+              // เดิมยังไม่อ่าน ตอนนี้อ่านแล้ว - ลด count
               unreadCount.value = Math.max(0, unreadCount.value - 1)
             } else if (!wasUnread && isNowUnread) {
-              // Was read, now unread - increment count
+              // เดิมอ่านแล้ว ตอนนี้ยังไม่อ่าน - เพิ่ม count
               unreadCount.value++
             }
             
             notifications.value[idx] = updatedNotification
             
-            // Update in IndexedDB cache
+            // อัพเดทใน IndexedDB cache
             updateNotificationInCache(updatedNotification).catch(err => {
-              console.warn('Failed to update cached notification:', err)
+              console.warn('ไม่สามารถอัพเดท cached notification ได้:', err)
             })
           }
         }
@@ -505,25 +508,25 @@ export const useNotificationInboxStore = defineStore('notificationInbox', () => 
         {
           event: 'DELETE',
           schema: 'public',
-          table: 'notification_history',
+          table: 'notifications',
           filter: `user_id=eq.${userId}`
         },
         (payload) => {
-          // Remove notification from local state
+          // ลบ notification จาก local state
           const deletedNotification = payload.old
           
           const idx = notifications.value.findIndex(n => n.id === deletedNotification.id)
           if (idx !== -1) {
-            // Update unread count if deleted notification was unread
-            if (!deletedNotification.read_at) {
+            // อัพเดท unread count ถ้า notification ที่ลบยังไม่ได้อ่าน
+            if (!deletedNotification.is_read) {
               unreadCount.value = Math.max(0, unreadCount.value - 1)
             }
             
             notifications.value.splice(idx, 1)
             
-            // Remove from IndexedDB cache
+            // ลบจาก IndexedDB cache
             removeNotificationFromCache(deletedNotification.id).catch(err => {
-              console.warn('Failed to remove cached notification:', err)
+              console.warn('ไม่สามารถลบ cached notification ได้:', err)
             })
           }
         }
