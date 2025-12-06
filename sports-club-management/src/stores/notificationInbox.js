@@ -426,111 +426,98 @@ export const useNotificationInboxStore = defineStore('notificationInbox', () => 
   /**
    * Subscribe to realtime notification changes
    * Requirements: 3.4
+   * ใช้ Realtime Broadcast แทน postgres_changes เพื่อ scalability ที่ดีกว่า
    * 
    * @param {string} userId - User ID to subscribe for
    */
-  function subscribeToRealtime(userId) {
+  async function subscribeToRealtime(userId) {
     if (!userId) return
 
     // Unsubscribe from existing subscription
     unsubscribeFromRealtime()
 
-    // สร้าง subscription ใหม่ - ใช้ตาราง notifications
+    // ตั้งค่า auth สำหรับ Realtime Authorization
+    await supabase.realtime.setAuth()
+
+    // สร้าง subscription ใหม่ - ใช้ Broadcast แทน postgres_changes
     realtimeSubscription = supabase
-      .channel(`notification-inbox-${userId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${userId}`
-        },
-        (payload) => {
-          // เพิ่ม notification ใหม่ไว้ด้านบนสุด
-          const newNotification = payload.new
+      .channel(`notifications:${userId}`, {
+        config: { private: true } // ใช้ private channel สำหรับ security
+      })
+      .on('broadcast', { event: 'INSERT' }, (payload) => {
+        // เพิ่ม notification ใหม่ไว้ด้านบนสุด
+        const newNotification = payload.payload?.record || payload.payload
+        
+        if (!newNotification?.id) return
+        
+        // ตรวจสอบว่ามีอยู่แล้วหรือไม่ (หลีกเลี่ยง duplicates)
+        const exists = notifications.value.some(n => n.id === newNotification.id)
+        if (!exists) {
+          notifications.value.unshift(newNotification)
           
-          // ตรวจสอบว่ามีอยู่แล้วหรือไม่ (หลีกเลี่ยง duplicates)
-          const exists = notifications.value.some(n => n.id === newNotification.id)
-          if (!exists) {
-            notifications.value.unshift(newNotification)
-            
-            // เพิ่ม unread count ถ้ายังไม่ได้อ่าน
-            if (!newNotification.is_read) {
-              unreadCount.value++
-            }
-            
-            // เพิ่มลง IndexedDB cache
-            addNotificationToCache(newNotification).catch(err => {
-              console.warn('ไม่สามารถ cache notification ใหม่ได้:', err)
-            })
+          // เพิ่ม unread count ถ้ายังไม่ได้อ่าน
+          if (!newNotification.is_read) {
+            unreadCount.value++
           }
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${userId}`
-        },
-        (payload) => {
-          // อัพเดท notification ใน local state
-          const updatedNotification = payload.new
-          const oldNotification = payload.old
           
-          const idx = notifications.value.findIndex(n => n.id === updatedNotification.id)
-          if (idx !== -1) {
-            // ตรวจสอบว่าสถานะการอ่านเปลี่ยนหรือไม่
-            const wasUnread = !oldNotification.is_read
-            const isNowUnread = !updatedNotification.is_read
-            
-            if (wasUnread && !isNowUnread) {
-              // เดิมยังไม่อ่าน ตอนนี้อ่านแล้ว - ลด count
-              unreadCount.value = Math.max(0, unreadCount.value - 1)
-            } else if (!wasUnread && isNowUnread) {
-              // เดิมอ่านแล้ว ตอนนี้ยังไม่อ่าน - เพิ่ม count
-              unreadCount.value++
-            }
-            
-            notifications.value[idx] = updatedNotification
-            
-            // อัพเดทใน IndexedDB cache
-            updateNotificationInCache(updatedNotification).catch(err => {
-              console.warn('ไม่สามารถอัพเดท cached notification ได้:', err)
-            })
-          }
+          // เพิ่มลง IndexedDB cache
+          addNotificationToCache(newNotification).catch(err => {
+            console.warn('ไม่สามารถ cache notification ใหม่ได้:', err)
+          })
         }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'DELETE',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${userId}`
-        },
-        (payload) => {
-          // ลบ notification จาก local state
-          const deletedNotification = payload.old
+      })
+      .on('broadcast', { event: 'UPDATE' }, (payload) => {
+        // อัพเดท notification ใน local state
+        const data = payload.payload
+        const updatedNotification = data?.record || data
+        const oldNotification = data?.old_record
+        
+        if (!updatedNotification?.id) return
+        
+        const idx = notifications.value.findIndex(n => n.id === updatedNotification.id)
+        if (idx !== -1) {
+          // ตรวจสอบว่าสถานะการอ่านเปลี่ยนหรือไม่
+          const wasUnread = oldNotification ? !oldNotification.is_read : !notifications.value[idx].is_read
+          const isNowUnread = !updatedNotification.is_read
           
-          const idx = notifications.value.findIndex(n => n.id === deletedNotification.id)
-          if (idx !== -1) {
-            // อัพเดท unread count ถ้า notification ที่ลบยังไม่ได้อ่าน
-            if (!deletedNotification.is_read) {
-              unreadCount.value = Math.max(0, unreadCount.value - 1)
-            }
-            
-            notifications.value.splice(idx, 1)
-            
-            // ลบจาก IndexedDB cache
-            removeNotificationFromCache(deletedNotification.id).catch(err => {
-              console.warn('ไม่สามารถลบ cached notification ได้:', err)
-            })
+          if (wasUnread && !isNowUnread) {
+            // เดิมยังไม่อ่าน ตอนนี้อ่านแล้ว - ลด count
+            unreadCount.value = Math.max(0, unreadCount.value - 1)
+          } else if (!wasUnread && isNowUnread) {
+            // เดิมอ่านแล้ว ตอนนี้ยังไม่อ่าน - เพิ่ม count
+            unreadCount.value++
           }
+          
+          notifications.value[idx] = updatedNotification
+          
+          // อัพเดทใน IndexedDB cache
+          updateNotificationInCache(updatedNotification).catch(err => {
+            console.warn('ไม่สามารถอัพเดท cached notification ได้:', err)
+          })
         }
-      )
+      })
+      .on('broadcast', { event: 'DELETE' }, (payload) => {
+        // ลบ notification จาก local state
+        const data = payload.payload
+        const deletedNotification = data?.old_record || data
+        
+        if (!deletedNotification?.id) return
+        
+        const idx = notifications.value.findIndex(n => n.id === deletedNotification.id)
+        if (idx !== -1) {
+          // อัพเดท unread count ถ้า notification ที่ลบยังไม่ได้อ่าน
+          if (!deletedNotification.is_read) {
+            unreadCount.value = Math.max(0, unreadCount.value - 1)
+          }
+          
+          notifications.value.splice(idx, 1)
+          
+          // ลบจาก IndexedDB cache
+          removeNotificationFromCache(deletedNotification.id).catch(err => {
+            console.warn('ไม่สามารถลบ cached notification ได้:', err)
+          })
+        }
+      })
       .subscribe()
   }
 

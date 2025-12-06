@@ -63,8 +63,8 @@ const quickActionGroups = computed(() => {
         actions: [
           { icon: 'chart', label: 'ประเมินผล', to: '/evaluation' },
           { icon: 'progress', label: 'แผนพัฒนา', to: '/training-plans' },
+          { icon: 'tracking', label: 'ติดตามค่าตัวเลข', to: '/tracking' },
           { icon: 'scoring', label: 'เกณฑ์คะแนน', to: '/scoring-config' },
-          { icon: 'calculator', label: 'คำนวณคะแนน', to: '/score-calculator' },
         ]
       },
       {
@@ -95,7 +95,7 @@ const quickActionGroups = computed(() => {
           { icon: 'users', label: 'นักกีฬา', to: '/athletes' },
           { icon: 'chart', label: 'ประเมินผล', to: '/evaluation' },
           { icon: 'progress', label: 'แผนพัฒนา', to: '/training-plans' },
-          { icon: 'checklist', label: 'เช็คชื่อ', to: '/attendance' },
+          { icon: 'tracking', label: 'ติดตามค่าตัวเลข', to: '/tracking' },
         ]
       },
       {
@@ -124,6 +124,7 @@ const quickActionGroups = computed(() => {
       title: 'เมนูหลัก',
       actions: [
         { icon: 'chart', label: 'ผลงานของฉัน', to: '/my-performance' },
+        { icon: 'tracking', label: 'ติดตามความคืบหน้า', to: '/my-tracking' },
         { icon: 'clipboard', label: 'บันทึกฝึกซ้อม', to: '/training-logs' },
         { icon: 'calendar', label: 'ตารางนัดหมาย', to: '/schedules' },
         { icon: 'trophy', label: 'ทัวร์นาเมนต์', to: '/tournaments' },
@@ -213,6 +214,7 @@ const quickActions = computed(() => {
               <svg v-else-if="action.icon === 'star'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
               <svg v-else-if="action.icon === 'file'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
               <svg v-else-if="action.icon === 'chart'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+              <svg v-else-if="action.icon === 'tracking'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
               <svg v-else-if="action.icon === 'scoring'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
               <svg v-else-if="action.icon === 'checklist'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
               <svg v-else-if="action.icon === 'leave'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>

@@ -32,6 +32,13 @@ const routes = [
   { path: '/training-plans', name: 'TrainingPlans', component: () => import('@/views/TrainingPlansView.vue'), meta: { requiresAuth: true, roles: ['admin', 'coach'] } },
   { path: '/training-plans/:id', name: 'PlanDetail', component: () => import('@/views/PlanDetailView.vue'), meta: { requiresAuth: true, roles: ['admin', 'coach'] } },
   
+  // Athlete Tracking - ติดตามค่าตัวเลขนักกีฬา (Requirements: 1.1, 3.1, 6.1, 6.2, 6.3)
+  { path: '/tracking', name: 'TrackingPlans', component: () => import('@/views/TrackingPlansView.vue'), meta: { requiresAuth: true, roles: ['admin', 'coach'] } },
+  { path: '/tracking/:id', name: 'TrackingDetail', component: () => import('@/views/TrackingDetailView.vue'), meta: { requiresAuth: true, roles: ['admin', 'coach'] } },
+  
+  // Athlete Tracking - มุมมองนักกีฬา (Requirements: 4.1, 5.2, 6.3)
+  { path: '/my-tracking', name: 'MyTracking', component: () => import('@/views/AthleteTrackingView.vue'), meta: { requiresAuth: true, roles: ['athlete'] } },
+  
   // Athlete only
   { path: '/my-applications', name: 'MyApplications', component: () => import('@/views/MyApplications.vue'), meta: { requiresAuth: true, roles: ['athlete'] } },
   { path: '/leave-request', name: 'LeaveRequest', component: () => import('@/views/LeaveRequest.vue'), meta: { requiresAuth: true, roles: ['athlete'] } },

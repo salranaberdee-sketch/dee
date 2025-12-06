@@ -41,11 +41,26 @@ watch(() => auth.user?.id, async (userId) => {
     // New notification inbox system (Requirements 3.1, 3.4)
     await notificationInbox.fetchUnreadCount(userId)
     notificationInbox.subscribeToRealtime(userId)
+    
+    // Subscribe realtime สำหรับ announcements (รองรับ urgent popup)
+    const userClubId = auth.profile?.club_id
+    await data.subscribeToAnnouncements(null) // global channel
+    if (userClubId) {
+      await data.subscribeToAnnouncements(userClubId) // club channel
+    }
   } else {
     data.unsubscribeFromNotifications()
+    data.unsubscribeFromAnnouncements()
     notificationInbox.reset()
   }
 }, { immediate: true })
+
+// Subscribe club channel เมื่อ profile โหลดเสร็จ (กรณี club_id ยังไม่มีตอน user login)
+watch(() => auth.profile?.club_id, async (clubId) => {
+  if (clubId && auth.user?.id) {
+    await data.subscribeToAnnouncements(clubId)
+  }
+})
 
 onUnmounted(() => {
   window.removeEventListener('online', updateOnlineStatus)

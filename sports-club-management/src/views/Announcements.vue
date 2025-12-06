@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useDataStore } from '@/stores/data'
 import Modal from '@/components/Modal.vue'
@@ -34,6 +34,19 @@ const priorityColors = {
 
 onMounted(async () => {
   await Promise.all([data.fetchAnnouncements(), data.fetchClubs()])
+  
+  // Subscribe รับ announcements แบบ realtime
+  // ถ้ามี club_id ให้ subscribe ทั้ง global และ club channel
+  const userClubId = auth.profile?.club_id
+  await data.subscribeToAnnouncements(null) // global channel
+  if (userClubId) {
+    await data.subscribeToAnnouncements(userClubId) // club channel
+  }
+})
+
+// ยกเลิก subscription เมื่อออกจากหน้า
+onUnmounted(() => {
+  data.unsubscribeFromAnnouncements()
 })
 
 const canCreate = computed(() => auth.isAdmin || auth.isCoach)

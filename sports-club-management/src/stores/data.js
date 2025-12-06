@@ -1126,27 +1126,36 @@ export const useDataStore = defineStore('data', () => {
     return { success: false, message: err?.message }
   }
 
-  // Get unread urgent announcements for popup (filtered by target_type and role)
+  // ดึงประกาศเร่งด่วนที่ยังไม่ได้อ่าน (กรองตาม target_type และ role)
   async function getUnreadUrgentAnnouncements(userId, userRole, userClubId) {
+    // ดึงรายการ announcement_id ที่ user นี้อ่านแล้ว
+    const { data: readData } = await supabase
+      .from('announcement_reads')
+      .select('announcement_id')
+      .eq('user_id', userId)
+    
+    const readIds = new Set((readData || []).map(r => r.announcement_id))
+    
+    // ดึงประกาศเร่งด่วนทั้งหมด
     const { data, error: err } = await supabase
       .from('announcements')
-      .select('*, clubs(name), user_profiles(name), announcement_reads!left(user_id)')
+      .select('*, clubs(name), user_profiles(name)')
       .eq('priority', 'urgent')
       .order('created_at', { ascending: false })
     
     if (!err && data) {
-      // Filter by target_type and club, then filter out already read
+      // กรองตาม target_type, club และสถานะการอ่าน
       return data
         .filter(a => {
-          // Already read? Skip
-          if (a.announcement_reads?.some(r => r.user_id === userId)) return false
+          // อ่านแล้ว? ข้าม
+          if (readIds.has(a.id)) return false
           
-          // Check target_type
+          // ตรวจสอบ target_type
           if (a.target_type === 'all') return true
           if (a.target_type === 'coaches' && userRole === 'coach') return true
           if (a.target_type === 'athletes' && userRole === 'athlete') return true
           if (a.target_type === 'club') {
-            // Club-specific: check if user is in that club
+            // เฉพาะชมรม: ตรวจสอบว่า user อยู่ในชมรมนั้น
             return a.club_id === userClubId || !a.club_id
           }
           
@@ -1158,12 +1167,142 @@ export const useDataStore = defineStore('data', () => {
   }
 
   // Mark announcement as read
+  // บันทึกว่าผู้ใช้อ่านประกาศแล้ว
   async function markAnnouncementAsRead(announcementId, userId) {
     const { error: err } = await supabase
       .from('announcement_reads')
-      .upsert({ announcement_id: announcementId, user_id: userId })
+      .upsert(
+        { 
+          announcement_id: announcementId, 
+          user_id: userId,
+          read_at: new Date().toISOString()
+        },
+        { 
+          onConflict: 'announcement_id,user_id',
+          ignoreDuplicates: true
+        }
+      )
     
-    return !err
+    // ไม่ถือว่า error ถ้าเป็น conflict (อ่านซ้ำ)
+    return !err || err.code === '23505'
+  }
+
+  // ============ ANNOUNCEMENTS REALTIME ============
+  // ใช้ Realtime Broadcast เพื่อ scalability ที่ดีกว่า postgres_changes
+  const announcementSubscriptions = new Map()
+
+  /**
+   * สร้าง handler สำหรับ broadcast events
+   */
+  function createAnnouncementHandler() {
+    return {
+      onInsert: async (payload) => {
+        // ดึงข้อมูลเต็มของ announcement ใหม่
+        const newRecord = payload.payload?.record || payload.payload
+        if (!newRecord?.id) return
+
+        // ตรวจสอบว่ามีอยู่แล้วหรือไม่
+        const exists = announcements.value.some(a => a.id === newRecord.id)
+        if (exists) return
+
+        // ดึงข้อมูลเพิ่มเติม (clubs, user_profiles)
+        const { data: fullData } = await supabase
+          .from('announcements')
+          .select('*, clubs(name), user_profiles(name)')
+          .eq('id', newRecord.id)
+          .single()
+
+        if (fullData) {
+          const mapped = { ...fullData, author: fullData.user_profiles }
+          // เพิ่มไว้ด้านบนสุด (ถ้า pinned) หรือตามลำดับ
+          if (fullData.is_pinned) {
+            announcements.value.unshift(mapped)
+          } else {
+            // หาตำแหน่งหลัง pinned items
+            const firstNonPinnedIdx = announcements.value.findIndex(a => !a.is_pinned)
+            if (firstNonPinnedIdx === -1) {
+              announcements.value.push(mapped)
+            } else {
+              announcements.value.splice(firstNonPinnedIdx, 0, mapped)
+            }
+          }
+        }
+      },
+      onUpdate: async (payload) => {
+        // อัพเดท announcement ใน local state
+        const updatedRecord = payload.payload?.record || payload.payload
+        if (!updatedRecord?.id) return
+
+        const idx = announcements.value.findIndex(a => a.id === updatedRecord.id)
+        if (idx === -1) return
+
+        // ดึงข้อมูลเพิ่มเติม
+        const { data: fullData } = await supabase
+          .from('announcements')
+          .select('*, clubs(name), user_profiles(name)')
+          .eq('id', updatedRecord.id)
+          .single()
+
+        if (fullData) {
+          announcements.value[idx] = { ...fullData, author: fullData.user_profiles }
+        }
+      },
+      onDelete: (payload) => {
+        // ลบ announcement จาก local state
+        const deletedRecord = payload.payload?.old_record || payload.payload
+        if (!deletedRecord?.id) return
+
+        announcements.value = announcements.value.filter(a => a.id !== deletedRecord.id)
+      }
+    }
+  }
+
+  /**
+   * Subscribe รับ announcements แบบ realtime
+   * @param {string|null} clubId - Club ID สำหรับ filter (null = global)
+   */
+  async function subscribeToAnnouncements(clubId = null) {
+    // กำหนด channel name ตาม club
+    const channelName = clubId
+      ? `announcements:${clubId}`
+      : 'announcements:global'
+
+    // ถ้า subscribe channel นี้อยู่แล้ว ไม่ต้องทำซ้ำ
+    if (announcementSubscriptions.has(channelName)) return
+
+    // ตั้งค่า auth สำหรับ Realtime Authorization
+    await supabase.realtime.setAuth()
+
+    const handler = createAnnouncementHandler()
+
+    // สร้าง subscription ใหม่ พร้อม callback เพื่อ debug
+    const subscription = supabase
+      .channel(channelName, {
+        config: { private: true }
+      })
+      .on('broadcast', { event: 'INSERT' }, handler.onInsert)
+      .on('broadcast', { event: 'UPDATE' }, handler.onUpdate)
+      .on('broadcast', { event: 'DELETE' }, handler.onDelete)
+      .subscribe((status, err) => {
+        if (status === 'SUBSCRIBED') {
+          console.log(`[Realtime] Subscribed to ${channelName}`)
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error(`[Realtime] Error subscribing to ${channelName}:`, err)
+        }
+      })
+
+    // เก็บ subscription ไว้
+    announcementSubscriptions.set(channelName, subscription)
+  }
+
+  /**
+   * ยกเลิก subscription announcements ทั้งหมด
+   */
+  function unsubscribeFromAnnouncements() {
+    announcementSubscriptions.forEach((subscription, channelName) => {
+      supabase.removeChannel(subscription)
+    })
+    announcementSubscriptions.clear()
   }
 
   // ============ EVENTS ============
@@ -2742,6 +2881,7 @@ export const useDataStore = defineStore('data', () => {
     // Announcements
     fetchAnnouncements, addAnnouncement, updateAnnouncement, deleteAnnouncement,
     getUnreadUrgentAnnouncements, markAnnouncementAsRead,
+    subscribeToAnnouncements, unsubscribeFromAnnouncements,
     
     // Events
     fetchEvents, addEvent, updateEvent, deleteEvent, getEventById,

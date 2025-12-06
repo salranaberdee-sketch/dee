@@ -9,9 +9,17 @@ const data = useDataStore()
 const urgentAnnouncements = ref([])
 const currentIndex = ref(0)
 const showPopup = ref(false)
-
 const currentAnnouncement = ref(null)
 
+// เก็บ ID ของประกาศที่แสดงแล้วใน session นี้ (ป้องกันแสดงซ้ำจาก realtime)
+const shownAnnouncementIds = ref(new Set())
+
+// เก็บ ID ของประกาศที่กำลังแสดงอยู่ใน queue
+const queuedAnnouncementIds = ref(new Set())
+
+/**
+ * โหลดประกาศเร่งด่วนที่ยังไม่ได้อ่าน
+ */
 async function loadUrgentAnnouncements() {
   if (!auth.user?.id || !auth.profile) return
   
@@ -20,26 +28,105 @@ async function loadUrgentAnnouncements() {
     auth.profile.role,
     auth.profile.club_id
   )
-  urgentAnnouncements.value = unread
   
-  if (unread.length > 0) {
-    currentAnnouncement.value = unread[0]
+  // กรองเฉพาะประกาศที่ยังไม่ได้แสดงใน session นี้
+  const newUnread = unread.filter(a => !shownAnnouncementIds.value.has(a.id))
+  
+  if (newUnread.length === 0) return
+  
+  // เพิ่ม ID เข้า tracking sets
+  newUnread.forEach(a => {
+    shownAnnouncementIds.value.add(a.id)
+    queuedAnnouncementIds.value.add(a.id)
+  })
+  
+  urgentAnnouncements.value = newUnread
+  currentAnnouncement.value = newUnread[0]
+  currentIndex.value = 0
+  showPopup.value = true
+}
+
+/**
+ * ตรวจสอบว่าประกาศนี้เกี่ยวข้องกับ user หรือไม่
+ * @param {Object} announcement - ประกาศที่ต้องการตรวจสอบ
+ * @returns {boolean} - true ถ้าเกี่ยวข้อง
+ */
+function isAnnouncementRelevant(announcement) {
+  const userRole = auth.profile?.role
+  const userClubId = auth.profile?.club_id
+  const targetType = announcement.target_type
+  
+  // ตรวจสอบ target_type
+  if (targetType === 'coaches' && userRole !== 'coach') return false
+  if (targetType === 'athletes' && userRole !== 'athlete') return false
+  
+  // ตรวจสอบ club_id (ถ้ามี)
+  if (targetType === 'club' && announcement.club_id) {
+    return announcement.club_id === userClubId
+  }
+  
+  // target_type === 'all' หรือไม่มี club_id
+  return true
+}
+
+/**
+ * ตรวจสอบและแสดง popup สำหรับประกาศเร่งด่วนใหม่จาก realtime
+ * @param {Object} announcement - ประกาศใหม่ที่เข้ามา
+ */
+function showNewUrgentAnnouncement(announcement) {
+  if (!announcement || announcement.priority !== 'urgent') return
+  
+  // ตรวจสอบว่าแสดงไปแล้วหรืออยู่ใน queue
+  if (shownAnnouncementIds.value.has(announcement.id)) return
+  if (queuedAnnouncementIds.value.has(announcement.id)) return
+  
+  // ตรวจสอบว่าประกาศนี้เกี่ยวข้องกับ user หรือไม่
+  if (!isAnnouncementRelevant(announcement)) return
+  
+  // เพิ่มเข้า tracking sets
+  shownAnnouncementIds.value.add(announcement.id)
+  queuedAnnouncementIds.value.add(announcement.id)
+  
+  // ถ้ากำลังแสดง popup อยู่ ให้เพิ่มเข้า queue
+  if (showPopup.value) {
+    // ตรวจสอบว่าไม่มีใน queue อยู่แล้ว
+    const exists = urgentAnnouncements.value.some(a => a.id === announcement.id)
+    if (!exists) {
+      urgentAnnouncements.value.push(announcement)
+    }
+  } else {
+    // แสดง popup ทันที
+    urgentAnnouncements.value = [announcement]
+    currentAnnouncement.value = announcement
     currentIndex.value = 0
     showPopup.value = true
   }
 }
 
+/**
+ * กดรับทราบ - บันทึกว่าอ่านแล้วและไปยังประกาศถัดไป
+ */
 async function markAsReadAndNext() {
   if (!currentAnnouncement.value || !auth.user?.id) return
   
-  await data.markAnnouncementAsRead(currentAnnouncement.value.id, auth.user.id)
+  const currentId = currentAnnouncement.value.id
   
-  // Move to next or close
+  // บันทึกว่าอ่านแล้ว
+  await data.markAnnouncementAsRead(currentId, auth.user.id)
+  
+  // ลบออกจาก queue
+  queuedAnnouncementIds.value.delete(currentId)
+  
+  // ไปยังประกาศถัดไปหรือปิด
   if (currentIndex.value < urgentAnnouncements.value.length - 1) {
     currentIndex.value++
     currentAnnouncement.value = urgentAnnouncements.value[currentIndex.value]
   } else {
+    // ปิด popup และ reset state
     showPopup.value = false
+    urgentAnnouncements.value = []
+    currentIndex.value = 0
+    currentAnnouncement.value = null
   }
 }
 
@@ -54,16 +141,37 @@ function formatDate(dateStr) {
 }
 
 onMounted(() => {
-  // Load after a short delay to let auth initialize
+  // โหลดหลังจาก auth initialize
   setTimeout(loadUrgentAnnouncements, 1000)
 })
 
-// Watch for auth changes (need both user and profile)
+// Watch สำหรับ auth changes
 watch([() => auth.user?.id, () => auth.profile?.role], ([newId, newRole]) => {
   if (newId && newRole) {
     loadUrgentAnnouncements()
   }
 })
+
+// Watch สำหรับประกาศใหม่จาก realtime
+watch(
+  () => data.announcements,
+  (newAnnouncements, oldAnnouncements) => {
+    if (!auth.user?.id || !auth.profile) return
+    if (!oldAnnouncements || oldAnnouncements.length === 0) return
+    
+    // หาประกาศใหม่ที่เพิ่มเข้ามา (ไม่มีใน oldAnnouncements)
+    const oldIds = new Set(oldAnnouncements.map(a => a.id))
+    const newItems = (newAnnouncements || []).filter(a => !oldIds.has(a.id))
+    
+    // ตรวจสอบประกาศเร่งด่วนใหม่
+    newItems.forEach(announcement => {
+      if (announcement.priority === 'urgent') {
+        showNewUrgentAnnouncement(announcement)
+      }
+    })
+  },
+  { deep: true }
+)
 </script>
 
 <template>
