@@ -58,6 +58,12 @@ const routes = [
   { path: '/albums', name: 'AlbumManagement', component: () => import('@/views/AlbumManagement.vue'), meta: { requiresAuth: true, roles: ['admin', 'coach'] } },
   { path: '/albums/club/:clubId', name: 'AlbumClubAthletes', component: () => import('@/views/AlbumManagement.vue'), meta: { requiresAuth: true, roles: ['admin'] } },
   { path: '/albums/athlete/:userId', name: 'AthleteAlbumView', component: () => import('@/views/AthleteAlbumView.vue'), meta: { requiresAuth: true, roles: ['admin', 'coach'] } },
+  
+  // Facility Booking - ระบบขอใช้สถานที่ (Requirements 1.1, 2.1, 3.1, 4.1, 5.1)
+  { path: '/facilities', name: 'FacilityList', component: () => import('@/views/FacilityListView.vue'), meta: { requiresAuth: true } },
+  { path: '/facilities/:id', name: 'FacilityDetail', component: () => import('@/views/FacilityDetailView.vue'), meta: { requiresAuth: true } },
+  { path: '/my-bookings', name: 'MyBookings', component: () => import('@/views/MyBookingsView.vue'), meta: { requiresAuth: true } },
+  { path: '/booking-manage', name: 'BookingManage', component: () => import('@/views/BookingManageView.vue'), meta: { requiresAuth: true, roles: ['admin', 'coach'] } },
 ]
 
 const router = createRouter({ history: createWebHistory(), routes })
