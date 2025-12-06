@@ -17,108 +17,85 @@
 
     <!-- Plan Detail Content -->
     <template v-else-if="plan">
-      <!-- Plan Header (Task 11.1) -->
-      <div class="plan-header">
-        <div class="header-top">
+      <!-- Header แบบใหม่ - กระชับ สะอาดตา -->
+      <div class="plan-header-new">
+        <div class="header-left">
           <button class="btn-back" @click="goBack">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M19 12H5M12 19l-7-7 7-7"/>
             </svg>
           </button>
-          <div class="header-info">
-            <div class="plan-type-badge">{{ getPlanTypeName(plan.plan_type) }}</div>
-            <h1>{{ plan.name }}</h1>
-            <p v-if="plan.description" class="description">{{ plan.description }}</p>
-          </div>
-          <div class="header-actions">
-            <span :class="['status-badge', plan.is_active ? 'status-active' : 'status-inactive']">
-              {{ plan.is_active ? 'ใช้งานอยู่' : 'ปิดใช้งาน' }}
-            </span>
-            <button v-if="canEdit" class="btn-icon" @click="openEditModal" title="แก้ไขแผน">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
-                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
-              </svg>
-            </button>
+          <div class="header-title">
+            <div class="title-row">
+              <h1>{{ plan.name }}</h1>
+              <span :class="['status-pill', plan.is_active ? 'active' : 'inactive']">
+                {{ plan.is_active ? 'ใช้งาน' : 'ปิด' }}
+              </span>
+            </div>
+            <div class="header-meta">
+              <span class="meta-item">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+                {{ formatDateShort(plan.start_date) }} - {{ formatDateShort(plan.end_date) }}
+              </span>
+              <span class="meta-divider"></span>
+              <span class="meta-item">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                </svg>
+                {{ plan.athletes?.length || 0 }} คน
+              </span>
+              <span class="meta-divider"></span>
+              <span :class="['meta-item', 'days-left', { urgent: getDaysRemainingNum() <= 7 && getDaysRemainingNum() >= 0 }]">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                </svg>
+                {{ getDaysRemaining() }}
+              </span>
+            </div>
           </div>
         </div>
-
-        <!-- Plan Stats -->
-        <div class="plan-stats">
-          <div class="stat-card">
-            <div class="stat-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-              </svg>
-            </div>
-            <div class="stat-content">
-              <span class="stat-label">ระยะเวลา</span>
-              <span class="stat-value">{{ formatDate(plan.start_date) }} - {{ formatDate(plan.end_date) }}</span>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/>
-              </svg>
-            </div>
-            <div class="stat-content">
-              <span class="stat-label">นักกีฬา</span>
-              <span class="stat-value">{{ plan.athletes?.length || 0 }} คน</span>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M4 6h16M4 12h16M4 18h16"/>
-              </svg>
-            </div>
-            <div class="stat-content">
-              <span class="stat-label">ฟิลด์ติดตาม</span>
-              <span class="stat-value">{{ plan.fields?.length || 0 }} ฟิลด์</span>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-              </svg>
-            </div>
-            <div class="stat-content">
-              <span class="stat-label">วันที่เหลือ</span>
-              <span class="stat-value">{{ getDaysRemaining() }}</span>
-            </div>
-          </div>
+        <div class="header-right">
+          <button v-if="canEdit" class="btn-edit" @click="openEditModal" title="แก้ไขแผน">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+              <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+            </svg>
+            แก้ไข
+          </button>
         </div>
       </div>
 
-      <!-- Tabs -->
-      <div class="tabs">
+      <!-- Tabs แบบใหม่ -->
+      <div class="tabs-new">
         <button 
-          :class="['tab', { active: activeTab === 'athletes' }]" 
+          :class="['tab-new', { active: activeTab === 'athletes' }]" 
           @click="activeTab = 'athletes'"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
           </svg>
           นักกีฬา
+          <span class="tab-count">{{ plan.athletes?.length || 0 }}</span>
         </button>
         <button 
-          :class="['tab', { active: activeTab === 'logs' }]" 
+          :class="['tab-new', { active: activeTab === 'logs' }]" 
           @click="activeTab = 'logs'"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
           </svg>
           บันทึกค่า
+          <span class="tab-count">{{ logs.length }}</span>
         </button>
       </div>
 
-      <!-- Athletes Tab (Task 11.2) -->
-      <div v-if="activeTab === 'athletes'" class="tab-content">
-        <div class="section-header">
-          <h2>รายชื่อนักกีฬา</h2>
-          <button v-if="canEdit" class="btn-primary" @click="openAddAthleteModal">
+      <!-- Athletes Tab - แบบใหม่ สะอาดตา -->
+      <div v-if="activeTab === 'athletes'" class="tab-content-new">
+        <!-- Action Bar -->
+        <div class="action-bar" v-if="canEdit">
+          <button class="btn-add" @click="openAddAthleteModal">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>
             </svg>
@@ -126,83 +103,89 @@
           </button>
         </div>
 
-        <!-- Athletes List -->
-        <div v-if="plan.athletes?.length > 0" class="athletes-list">
+        <!-- Athletes Grid - แบบใหม่ -->
+        <div v-if="plan.athletes?.length > 0" class="athletes-grid-new">
           <div 
             v-for="athlete in plan.athletes" 
             :key="athlete.athlete_id" 
-            class="athlete-card"
+            class="athlete-card-new"
           >
-            <div class="athlete-header">
-              <div class="athlete-info">
-                <div class="avatar">
-                  <img v-if="athlete.athlete?.avatar_url" :src="athlete.athlete.avatar_url" :alt="athlete.athlete?.name" />
-                  <span v-else>{{ getInitials(athlete.athlete?.name) }}</span>
-                </div>
-                <div>
-                  <h3>{{ athlete.athlete?.name || 'ไม่ระบุชื่อ' }}</h3>
-                  <span class="athlete-status">{{ getAthleteOverallStatus(athlete) }}</span>
-                </div>
+            <!-- ส่วนบน: ข้อมูลนักกีฬา -->
+            <div class="athlete-top">
+              <div class="athlete-avatar-new">
+                <img v-if="athlete.athlete?.avatar_url" :src="athlete.athlete.avatar_url" :alt="athlete.athlete?.name" />
+                <span v-else>{{ getInitials(athlete.athlete?.name) }}</span>
               </div>
-              <div class="athlete-actions">
-                <button class="btn-icon-sm" @click="openLogModal(athlete)" title="บันทึกค่า">
+              <div class="athlete-name-section">
+                <h3>{{ athlete.athlete?.name || 'ไม่ระบุชื่อ' }}</h3>
+                <span :class="['overall-status', getAthleteOverallStatusClass(athlete)]">
+                  {{ getAthleteOverallStatus(athlete) }}
+                </span>
+              </div>
+              <div class="athlete-quick-actions">
+                <button class="btn-quick" @click="openLogModal(athlete)" title="บันทึกค่า">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M12 5v14M5 12h14"/>
                   </svg>
                 </button>
-                <button v-if="canEdit" class="btn-icon-sm" @click="openEditGoalsModal(athlete)" title="แก้ไขเป้าหมาย">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
-                  </svg>
-                </button>
-                <button v-if="canEdit" class="btn-icon-sm danger" @click="confirmRemoveAthlete(athlete)" title="นำออก">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="18" y1="11" x2="23" y2="11"/>
-                  </svg>
-                </button>
               </div>
             </div>
 
-            <!-- Progress for each field -->
-            <div class="progress-grid">
+            <!-- ส่วนกลาง: Progress Summary -->
+            <div class="progress-summary">
               <div 
-                v-for="field in plan.fields" 
+                v-for="field in plan.fields.slice(0, 3)" 
                 :key="field.id" 
-                class="progress-item"
+                class="progress-mini"
               >
-                <div class="progress-header">
-                  <span class="field-name">{{ field.name }}</span>
-                  <span class="field-unit">{{ field.unit }}</span>
+                <div class="progress-mini-header">
+                  <span class="mini-label">{{ field.name }}</span>
+                  <span class="mini-value">{{ getCurrentValue(athlete, field) }}<span class="mini-unit">{{ field.unit }}</span></span>
                 </div>
-                <div class="progress-values">
-                  <span class="current-value">{{ getCurrentValue(athlete, field) }}</span>
-                  <span class="target-value">/ {{ getTargetValue(athlete, field) }}</span>
-                </div>
-                <div class="progress-bar-container">
+                <div class="progress-mini-bar">
                   <div 
-                    class="progress-bar" 
+                    class="progress-mini-fill" 
                     :style="{ width: getProgressPercentage(athlete, field) + '%' }"
                     :class="getProgressStatus(athlete, field)"
                   ></div>
                 </div>
-                <div class="progress-footer">
-                  <span :class="['progress-status', getProgressStatus(athlete, field)]">
-                    {{ getProgressStatusText(athlete, field) }}
-                  </span>
-                  <span class="progress-percent">{{ getProgressPercentage(athlete, field) }}%</span>
-                </div>
               </div>
+              <div v-if="plan.fields.length > 3" class="more-fields">
+                +{{ plan.fields.length - 3 }} ฟิลด์
+              </div>
+            </div>
+
+            <!-- ส่วนล่าง: Actions -->
+            <div class="athlete-bottom">
+              <button v-if="canEdit" class="btn-sm-outline" @click="openEditGoalsModal(athlete)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+                </svg>
+                เป้าหมาย
+              </button>
+              <button v-if="canEdit" class="btn-sm-danger" @click="confirmRemoveAthlete(athlete)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="18" y1="11" x2="23" y2="11"/>
+                </svg>
+                นำออก
+              </button>
             </div>
           </div>
         </div>
 
-        <!-- Empty Athletes State -->
-        <div v-else class="empty-state">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/>
-          </svg>
-          <p>ยังไม่มีนักกีฬาในแผนนี้</p>
+        <!-- Empty State -->
+        <div v-else class="empty-state-new">
+          <div class="empty-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/>
+            </svg>
+          </div>
+          <h3>ยังไม่มีนักกีฬา</h3>
+          <p>เพิ่มนักกีฬาเพื่อเริ่มติดตามความก้าวหน้า</p>
           <button v-if="canEdit" class="btn-primary" @click="openAddAthleteModal">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 5v14M5 12h14"/>
+            </svg>
             เพิ่มนักกีฬาคนแรก
           </button>
         </div>
@@ -690,6 +673,25 @@ function formatDate(date) {
   })
 }
 
+// Format วันที่แบบสั้น
+function formatDateShort(date) {
+  if (!date) return '-'
+  return new Date(date).toLocaleDateString('th-TH', { 
+    day: 'numeric', 
+    month: 'short'
+  })
+}
+
+// คำนวณจำนวนวันที่เหลือเป็นตัวเลข
+function getDaysRemainingNum() {
+  if (!plan.value?.end_date) return null
+  const end = new Date(plan.value.end_date)
+  const now = new Date()
+  end.setHours(0, 0, 0, 0)
+  now.setHours(0, 0, 0, 0)
+  return Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+}
+
 function getDaysRemaining() {
   if (!plan.value?.end_date) return '-'
   const end = new Date(plan.value.end_date)
@@ -797,7 +799,28 @@ function getAthleteOverallStatus(athlete) {
   if (achievedCount === plan.value.fields.length) {
     return 'บรรลุเป้าหมายทั้งหมด'
   }
-  return `ความคืบหน้าเฉลี่ย ${avgPercentage}%`
+  return `${avgPercentage}%`
+}
+
+// คำนวณ class สำหรับ overall status
+function getAthleteOverallStatusClass(athlete) {
+  if (!plan.value?.fields?.length) return ''
+  
+  let totalPercentage = 0
+  let achievedCount = 0
+  
+  plan.value.fields.forEach(field => {
+    const percentage = getProgressPercentage(athlete, field)
+    totalPercentage += percentage
+    if (percentage >= 100) achievedCount++
+  })
+  
+  const avgPercentage = Math.round(totalPercentage / plan.value.fields.length)
+  
+  if (achievedCount === plan.value.fields.length) return 'achieved'
+  if (avgPercentage >= 70) return 'good'
+  if (avgPercentage >= 40) return 'moderate'
+  return 'low'
 }
 
 // Navigation
@@ -1275,104 +1298,484 @@ watch(() => route.params.id, (newId) => {
   margin: 0 0 4px;
 }
 
-.header-info .description {
-  color: #737373;
-  font-size: 14px;
-  margin: 0;
+/* Header แบบใหม่ - กระชับ */
+.plan-header-new {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 20px;
+  background: #fff;
+  border: 1px solid #E5E5E5;
+  border-radius: 12px;
+  margin-bottom: 16px;
 }
 
-.header-actions {
+.header-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.header-title {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.title-row {
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
-.status-badge {
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 500;
+.title-row h1 {
+  font-size: 22px;
+  font-weight: 700;
+  color: #171717;
+  margin: 0;
 }
 
-.status-active {
+.status-pill {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.status-pill.active {
   background: #D1FAE5;
   color: #065F46;
 }
 
-.status-inactive {
+.status-pill.inactive {
   background: #F3F4F6;
   color: #6B7280;
 }
 
-.btn-icon {
+.header-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #525252;
+}
+
+.meta-item svg {
+  width: 14px;
+  height: 14px;
+  color: #A3A3A3;
+}
+
+.meta-item.days-left.urgent {
+  color: #B45309;
+  font-weight: 600;
+}
+
+.meta-item.days-left.urgent svg {
+  color: #F59E0B;
+}
+
+.meta-divider {
+  width: 4px;
+  height: 4px;
+  background: #D4D4D4;
+  border-radius: 50%;
+}
+
+.header-right {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-edit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
   background: #F5F5F5;
   border: none;
-  width: 40px;
-  height: 40px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #171717;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.btn-edit:hover {
+  background: #E5E5E5;
+}
+
+.btn-edit svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Tabs แบบใหม่ */
+.tabs-new {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.tab-new {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #fff;
+  border: 1px solid #E5E5E5;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #525252;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+
+.tab-new:hover {
+  background: #F5F5F5;
+}
+
+.tab-new.active {
+  background: #171717;
+  color: #fff;
+  border-color: #171717;
+}
+
+.tab-new svg {
+  width: 16px;
+  height: 16px;
+}
+
+.tab-count {
+  padding: 2px 8px;
+  background: rgba(0,0,0,0.1);
   border-radius: 10px;
+  font-size: 12px;
+}
+
+.tab-new.active .tab-count {
+  background: rgba(255,255,255,0.2);
+}
+
+/* Tab Content แบบใหม่ */
+.tab-content-new {
+  background: #fff;
+  border: 1px solid #E5E5E5;
+  border-radius: 12px;
+  padding: 20px;
+}
+
+/* Action Bar */
+.action-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
+.btn-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  background: #171717;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.btn-add:hover {
+  background: #262626;
+}
+
+.btn-add svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Athletes Grid แบบใหม่ */
+.athletes-grid-new {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.athlete-card-new {
+  background: #FAFAFA;
+  border: 1px solid #E5E5E5;
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Athlete Top */
+.athlete-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.athlete-avatar-new {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #171717;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.athlete-avatar-new img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.athlete-name-section {
+  flex: 1;
+  min-width: 0;
+}
+
+.athlete-name-section h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: #171717;
+  margin: 0 0 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.overall-status {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.overall-status.achieved {
+  background: #D1FAE5;
+  color: #065F46;
+}
+
+.overall-status.good {
+  background: #DBEAFE;
+  color: #1E40AF;
+}
+
+.overall-status.moderate {
+  background: #FEF3C7;
+  color: #92400E;
+}
+
+.overall-status.low {
+  background: #FEE2E2;
+  color: #991B1B;
+}
+
+.athlete-quick-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-quick {
+  width: 36px;
+  height: 36px;
+  background: #171717;
+  border: none;
+  border-radius: 8px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.btn-icon:hover {
-  background: #E5E5E5;
+.btn-quick:hover {
+  background: #262626;
 }
 
-.btn-icon svg {
-  width: 18px;
-  height: 18px;
-  color: #171717;
-}
-
-/* Plan Stats */
-.plan-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 12px;
-}
-
-.stat-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-  background: #FAFAFA;
-  border-radius: 8px;
-}
-
-.stat-icon {
-  width: 40px;
-  height: 40px;
-  background: #171717;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.stat-icon svg {
-  width: 20px;
-  height: 20px;
+.btn-quick svg {
+  width: 16px;
+  height: 16px;
   color: #fff;
 }
 
-.stat-content {
+/* Progress Summary */
+.progress-summary {
   display: flex;
   flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: #fff;
+  border-radius: 8px;
 }
 
-.stat-label {
+.progress-mini {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.progress-mini-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.mini-label {
   font-size: 12px;
   color: #737373;
 }
 
-.stat-value {
+.mini-value {
   font-size: 14px;
   font-weight: 600;
   color: #171717;
+}
+
+.mini-unit {
+  font-size: 11px;
+  color: #A3A3A3;
+  margin-left: 2px;
+}
+
+.progress-mini-bar {
+  height: 4px;
+  background: #E5E5E5;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-mini-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: #171717;
+  transition: width 0.3s;
+}
+
+.progress-mini-fill.achieved {
+  background: #22C55E;
+}
+
+.progress-mini-fill.ahead {
+  background: #22C55E;
+}
+
+.progress-mini-fill.behind {
+  background: #F59E0B;
+}
+
+.more-fields {
+  font-size: 11px;
+  color: #A3A3A3;
+  text-align: center;
+  padding-top: 4px;
+}
+
+/* Athlete Bottom */
+.athlete-bottom {
+  display: flex;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid #E5E5E5;
+}
+
+.btn-sm-outline {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background: #fff;
+  border: 1px solid #E5E5E5;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #525252;
+  cursor: pointer;
+}
+
+.btn-sm-outline:hover {
+  background: #F5F5F5;
+}
+
+.btn-sm-outline svg {
+  width: 12px;
+  height: 12px;
+}
+
+.btn-sm-danger {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background: #fff;
+  border: 1px solid #FEE2E2;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #991B1B;
+  cursor: pointer;
+}
+
+.btn-sm-danger:hover {
+  background: #FEE2E2;
+}
+
+.btn-sm-danger svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* Empty State แบบใหม่ */
+.empty-state-new {
+  text-align: center;
+  padding: 48px 24px;
+}
+
+.empty-icon {
+  width: 64px;
+  height: 64px;
+  background: #F5F5F5;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+}
+
+.empty-icon svg {
+  width: 32px;
+  height: 32px;
+  color: #A3A3A3;
+}
+
+.empty-state-new h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #171717;
+  margin: 0 0 8px;
+}
+
+.empty-state-new p {
+  color: #737373;
+  margin: 0 0 20px;
+  font-size: 14px;
 }
 
 /* Tabs */
