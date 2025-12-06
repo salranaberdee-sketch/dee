@@ -1,10 +1,17 @@
 <template>
   <div class="tracking-plans-page">
-    <!-- Header -->
+    <!-- Header แบบใหม่ - ชัดเจนขึ้น -->
     <div class="page-header">
-      <div>
-        <h1>แผนติดตามนักกีฬา</h1>
-        <p class="subtitle">สร้างและจัดการแผนติดตามค่าตัวเลขของนักกีฬา</p>
+      <div class="header-content">
+        <div class="header-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+          </svg>
+        </div>
+        <div>
+          <h1>ติดตามนักกีฬา</h1>
+          <p class="subtitle">ติดตามน้ำหนัก เวลา และค่าต่างๆ ของนักกีฬา</p>
+        </div>
       </div>
       <button v-if="canCreate" class="btn-primary" @click="openCreateModal">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -14,33 +21,57 @@
       </button>
     </div>
 
-    <!-- Filters -->
-    <div class="filters">
-      <div class="filter-group">
-        <label>สถานะ</label>
-        <select v-model="filterStatus">
-          <option value="">ทั้งหมด</option>
-          <option value="active">ใช้งานอยู่</option>
-          <option value="inactive">ปิดใช้งาน</option>
-        </select>
+    <!-- Quick Stats - ภาพรวมเร็ว -->
+    <div class="quick-stats">
+      <div class="quick-stat">
+        <span class="quick-stat-value">{{ activePlansCount }}</span>
+        <span class="quick-stat-label">แผนที่ใช้งาน</span>
       </div>
-      <div class="filter-group">
-        <label>ประเภท</label>
-        <select v-model="filterType">
-          <option value="">ทั้งหมด</option>
+      <div class="quick-stat">
+        <span class="quick-stat-value">{{ totalAthletesInPlans }}</span>
+        <span class="quick-stat-label">นักกีฬาในแผน</span>
+      </div>
+      <div class="quick-stat urgent" v-if="urgentPlansCount > 0">
+        <span class="quick-stat-value">{{ urgentPlansCount }}</span>
+        <span class="quick-stat-label">ใกล้สิ้นสุด</span>
+      </div>
+    </div>
+
+    <!-- Filters แบบ compact -->
+    <div class="filters">
+      <div class="filter-tabs">
+        <button 
+          :class="['filter-tab', { active: filterStatus === '' }]" 
+          @click="filterStatus = ''"
+        >
+          ทั้งหมด
+        </button>
+        <button 
+          :class="['filter-tab', { active: filterStatus === 'active' }]" 
+          @click="filterStatus = 'active'"
+        >
+          ใช้งานอยู่
+        </button>
+        <button 
+          :class="['filter-tab', { active: filterStatus === 'inactive' }]" 
+          @click="filterStatus = 'inactive'"
+        >
+          ปิดใช้งาน
+        </button>
+      </div>
+      <div class="filter-right">
+        <select v-model="filterType" class="filter-select">
+          <option value="">ทุกประเภท</option>
           <option value="weight_control">ควบคุมน้ำหนัก</option>
           <option value="timing">จับเวลา</option>
           <option value="strength">ความแข็งแรง</option>
           <option value="general">ค่าร่างกายทั่วไป</option>
         </select>
-      </div>
-      <div class="filter-group search-group">
-        <label>ค้นหา</label>
         <div class="search-input-wrapper">
           <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
-          <input type="text" v-model="searchQuery" placeholder="ชื่อแผน...">
+          <input type="text" v-model="searchQuery" placeholder="ค้นหาแผน...">
         </div>
       </div>
     </div>
@@ -51,17 +82,21 @@
       <span>กำลังโหลด...</span>
     </div>
 
-    <!-- Plans Grid -->
+    <!-- Plans Grid - Card แบบใหม่ที่ชัดเจนขึ้น -->
     <div v-else class="plans-grid">
       <div 
         v-for="plan in filteredPlans" 
         :key="plan.id" 
         class="plan-card"
-        :class="{ inactive: !plan.is_active }"
+        :class="{ 
+          inactive: !plan.is_active,
+          urgent: isUrgent(plan)
+        }"
         @click="viewPlanDetail(plan)"
       >
-        <div class="card-header">
-          <div class="card-icon">
+        <!-- ส่วนบน: ชื่อและสถานะ -->
+        <div class="card-top">
+          <div class="card-type-icon" :class="plan.plan_type">
             <svg v-if="plan.plan_type === 'weight_control'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 3v18M3 12h18M5.5 5.5l13 13M18.5 5.5l-13 13"/>
             </svg>
@@ -75,58 +110,78 @@
               <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
             </svg>
           </div>
-          <span :class="['status-badge', plan.is_active ? 'status-active' : 'status-inactive']">
-            {{ plan.is_active ? 'ใช้งานอยู่' : 'ปิดใช้งาน' }}
-          </span>
-        </div>
-
-        <h3>{{ plan.name }}</h3>
-        <p class="description">{{ plan.description || 'ไม่มีคำอธิบาย' }}</p>
-        <p class="plan-type">{{ getPlanTypeName(plan.plan_type) }}</p>
-
-        <div class="date-range">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-          </svg>
-          <span>{{ formatDate(plan.start_date) }} - {{ formatDate(plan.end_date) }}</span>
-        </div>
-
-        <div class="card-stats">
-          <div class="stat">
-            <span class="stat-value">{{ plan.field_count || 0 }}</span>
-            <span class="stat-label">ฟิลด์</span>
-          </div>
-          <div class="stat">
-            <span class="stat-value">{{ getAthleteCount(plan) }}</span>
-            <span class="stat-label">นักกีฬา</span>
+          <div class="card-badges">
+            <span v-if="isUrgent(plan)" class="badge-urgent">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+              </svg>
+              {{ getDaysLeft(plan) }} วัน
+            </span>
+            <span :class="['status-badge', plan.is_active ? 'status-active' : 'status-inactive']">
+              {{ plan.is_active ? 'ใช้งาน' : 'ปิด' }}
+            </span>
           </div>
         </div>
 
+        <!-- ส่วนกลาง: ชื่อแผน -->
+        <div class="card-main">
+          <h3>{{ plan.name }}</h3>
+          <span class="plan-type-label">{{ getPlanTypeName(plan.plan_type) }}</span>
+        </div>
+
+        <!-- ส่วนล่าง: สถิติที่สำคัญ -->
+        <div class="card-bottom">
+          <div class="card-stat">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+            </svg>
+            <span>{{ getAthleteCount(plan) }} คน</span>
+          </div>
+          <div class="card-stat">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+            </svg>
+            <span>{{ formatDateShort(plan.end_date) }}</span>
+          </div>
+        </div>
+
+        <!-- Actions -->
         <div class="card-actions" @click.stop>
-          <router-link :to="`/tracking/${plan.id}`" class="btn-primary-sm">
-            ดูรายละเอียด
+          <router-link :to="`/tracking/${plan.id}`" class="btn-view">
+            ดูแผน
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
           </router-link>
-          <button v-if="canEdit(plan)" class="btn-icon" @click="openEditModal(plan)" title="แก้ไข">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
-              <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
-            </svg>
-          </button>
-          <button v-if="canDelete(plan)" class="btn-icon btn-danger" @click="confirmDeactivate(plan)" title="ปิดใช้งาน">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
-            </svg>
-          </button>
+          <div class="action-buttons">
+            <button v-if="canEdit(plan)" class="btn-icon-sm" @click="openEditModal(plan)" title="แก้ไข">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </button>
+            <button v-if="canDelete(plan)" class="btn-icon-sm danger" @click="confirmDeactivate(plan)" title="ปิดใช้งาน">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 
       <!-- Empty State -->
       <div v-if="filteredPlans.length === 0" class="empty-state">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-        </svg>
-        <p>{{ searchQuery || filterStatus || filterType ? 'ไม่พบแผนตามเงื่อนไข' : 'ยังไม่มีแผนติดตาม' }}</p>
+        <div class="empty-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+          </svg>
+        </div>
+        <h3>{{ searchQuery || filterStatus || filterType ? 'ไม่พบแผน' : 'ยังไม่มีแผนติดตาม' }}</h3>
+        <p>{{ searchQuery || filterStatus || filterType ? 'ลองเปลี่ยนเงื่อนไขการค้นหา' : 'สร้างแผนแรกเพื่อเริ่มติดตามนักกีฬา' }}</p>
         <button v-if="canCreate && !searchQuery && !filterStatus && !filterType" class="btn-primary" @click="openCreateModal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
           สร้างแผนแรก
         </button>
       </div>
@@ -353,6 +408,45 @@ function canEdit(plan) {
 
 function canDelete(plan) {
   return canEdit(plan) && plan.is_active
+}
+
+// Quick Stats - สถิติภาพรวม
+const activePlansCount = computed(() => {
+  return trackingStore.plans.filter(p => p.is_active).length
+})
+
+const totalAthletesInPlans = computed(() => {
+  return trackingStore.plans.reduce((sum, p) => sum + (p.athlete_count || 0), 0)
+})
+
+const urgentPlansCount = computed(() => {
+  return trackingStore.plans.filter(p => p.is_active && isUrgent(p)).length
+})
+
+// ตรวจสอบว่าแผนใกล้สิ้นสุดหรือไม่ (ภายใน 7 วัน)
+function isUrgent(plan) {
+  if (!plan.is_active || !plan.end_date) return false
+  const daysLeft = getDaysLeft(plan)
+  return daysLeft >= 0 && daysLeft <= 7
+}
+
+// คำนวณจำนวนวันที่เหลือ
+function getDaysLeft(plan) {
+  if (!plan.end_date) return null
+  const end = new Date(plan.end_date)
+  const now = new Date()
+  end.setHours(0, 0, 0, 0)
+  now.setHours(0, 0, 0, 0)
+  return Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+}
+
+// Format วันที่แบบสั้น
+function formatDateShort(date) {
+  if (!date) return '-'
+  return new Date(date).toLocaleDateString('th-TH', { 
+    day: 'numeric', 
+    month: 'short'
+  })
 }
 
 // กรองแผน
@@ -615,16 +709,39 @@ onMounted(async () => {
   margin: 0 auto;
 }
 
+/* Header แบบใหม่ */
 .page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-icon {
+  width: 56px;
+  height: 56px;
+  background: #171717;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.header-icon svg {
+  width: 28px;
+  height: 28px;
+  color: #fff;
 }
 
 .page-header h1 {
-  font-size: 24px;
-  font-weight: 600;
+  font-size: 26px;
+  font-weight: 700;
   color: #171717;
   margin: 0;
 }
@@ -633,6 +750,47 @@ onMounted(async () => {
   color: #737373;
   margin: 4px 0 0;
   font-size: 14px;
+}
+
+/* Quick Stats */
+.quick-stats {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.quick-stat {
+  display: flex;
+  flex-direction: column;
+  padding: 16px 24px;
+  background: #fff;
+  border: 1px solid #E5E5E5;
+  border-radius: 12px;
+  min-width: 120px;
+}
+
+.quick-stat.urgent {
+  background: #FEF3C7;
+  border-color: #F59E0B;
+}
+
+.quick-stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #171717;
+}
+
+.quick-stat.urgent .quick-stat-value {
+  color: #B45309;
+}
+
+.quick-stat-label {
+  font-size: 13px;
+  color: #737373;
+}
+
+.quick-stat.urgent .quick-stat-label {
+  color: #92400E;
 }
 
 /* Buttons */
@@ -724,39 +882,58 @@ onMounted(async () => {
   stroke: #EF4444;
 }
 
-/* Filters */
+/* Filters แบบใหม่ */
 .filters {
   display: flex;
+  justify-content: space-between;
+  align-items: center;
   gap: 16px;
   margin-bottom: 24px;
   flex-wrap: wrap;
 }
 
-.filter-group {
+.filter-tabs {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  background: #F5F5F5;
+  border-radius: 8px;
+  padding: 4px;
 }
 
-.filter-group label {
-  font-size: 12px;
-  color: #737373;
+.filter-tab {
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #525252;
+  cursor: pointer;
   font-weight: 500;
+  transition: all 0.15s;
 }
 
-.filter-group select,
-.filter-group input {
+.filter-tab:hover {
+  color: #171717;
+}
+
+.filter-tab.active {
+  background: #fff;
+  color: #171717;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.filter-right {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.filter-select {
   padding: 8px 12px;
   border: 1px solid #E5E5E5;
   border-radius: 6px;
   font-size: 14px;
-  min-width: 160px;
   background: #fff;
-}
-
-.search-group {
-  flex: 1;
-  min-width: 200px;
+  min-width: 140px;
 }
 
 .search-input-wrapper {
@@ -774,8 +951,11 @@ onMounted(async () => {
 }
 
 .search-input-wrapper input {
-  padding-left: 36px;
-  width: 100%;
+  padding: 8px 12px 8px 36px;
+  border: 1px solid #E5E5E5;
+  border-radius: 6px;
+  font-size: 14px;
+  width: 200px;
 }
 
 /* Loading */
@@ -802,59 +982,91 @@ onMounted(async () => {
   to { transform: rotate(360deg); }
 }
 
-/* Plans Grid */
+/* Plans Grid - Card แบบใหม่ */
 .plans-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
 }
 
 .plan-card {
   background: #fff;
   border: 1px solid #E5E5E5;
   border-radius: 12px;
-  padding: 20px;
+  padding: 16px;
   cursor: pointer;
-  transition: box-shadow 0.2s, transform 0.2s;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
 }
 
 .plan-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
   transform: translateY(-2px);
 }
 
 .plan-card.inactive {
-  opacity: 0.7;
+  opacity: 0.6;
+  background: #FAFAFA;
 }
 
-.card-header {
+.plan-card.urgent {
+  border-color: #F59E0B;
+  border-width: 2px;
+}
+
+/* Card Top */
+.card-top {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 12px;
 }
 
-.card-icon {
-  width: 48px;
-  height: 48px;
+.card-type-icon {
+  width: 44px;
+  height: 44px;
   background: #171717;
-  border-radius: 12px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.card-icon svg {
-  width: 24px;
-  height: 24px;
+.card-type-icon svg {
+  width: 22px;
+  height: 22px;
   color: #fff;
 }
 
+.card-badges {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.badge-urgent {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: #FEF3C7;
+  color: #B45309;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.badge-urgent svg {
+  width: 12px;
+  height: 12px;
+}
+
 .status-badge {
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .status-active {
@@ -867,98 +1079,153 @@ onMounted(async () => {
   color: #6B7280;
 }
 
+/* Card Main */
+.card-main {
+  margin-bottom: 12px;
+}
+
 .plan-card h3 {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 600;
   color: #171717;
   margin: 0 0 4px;
+  line-height: 1.3;
 }
 
-.description {
-  color: #737373;
-  font-size: 14px;
-  margin: 0 0 8px;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.plan-type {
+.plan-type-label {
   font-size: 12px;
-  color: #525252;
-  margin: 0 0 12px;
-  padding: 4px 8px;
-  background: #F5F5F5;
-  border-radius: 4px;
-  display: inline-block;
+  color: #737373;
 }
 
-.date-range {
+/* Card Bottom */
+.card-bottom {
+  display: flex;
+  gap: 16px;
+  padding: 10px 0;
+  border-top: 1px solid #F5F5F5;
+  border-bottom: 1px solid #F5F5F5;
+  margin-bottom: 12px;
+}
+
+.card-stat {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   font-size: 13px;
   color: #525252;
-  margin-bottom: 16px;
 }
 
-.date-range svg {
+.card-stat svg {
   width: 16px;
   height: 16px;
   color: #A3A3A3;
 }
 
-.card-stats {
-  display: flex;
-  gap: 24px;
-  margin-bottom: 16px;
-  padding: 12px;
-  background: #FAFAFA;
-  border-radius: 8px;
-}
-
-.stat {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.stat-value {
-  font-size: 24px;
-  font-weight: 600;
-  color: #171717;
-}
-
-.stat-label {
-  font-size: 12px;
-  color: #737373;
-}
-
+/* Card Actions */
 .card-actions {
   display: flex;
-  gap: 8px;
-  padding-top: 16px;
-  border-top: 1px solid #F5F5F5;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: auto;
+}
+
+.btn-view {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #171717;
+  color: #fff;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+
+.btn-view:hover {
+  background: #262626;
+}
+
+.btn-view svg {
+  width: 14px;
+  height: 14px;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-icon-sm {
+  background: transparent;
+  border: 1px solid #E5E5E5;
+  padding: 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-icon-sm svg {
+  width: 14px;
+  height: 14px;
+  color: #525252;
+}
+
+.btn-icon-sm:hover {
+  background: #F5F5F5;
+}
+
+.btn-icon-sm.danger:hover {
+  background: #FEE2E2;
+  border-color: #EF4444;
+}
+
+.btn-icon-sm.danger:hover svg {
+  color: #EF4444;
 }
 
 /* Empty State */
 .empty-state {
   grid-column: 1 / -1;
   text-align: center;
-  padding: 48px;
-  color: #737373;
+  padding: 60px 24px;
+  background: #FAFAFA;
+  border-radius: 12px;
+  border: 2px dashed #E5E5E5;
 }
 
-.empty-state svg {
-  width: 48px;
-  height: 48px;
-  margin-bottom: 12px;
-  opacity: 0.5;
+.empty-icon {
+  width: 64px;
+  height: 64px;
+  background: #E5E5E5;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+}
+
+.empty-icon svg {
+  width: 32px;
+  height: 32px;
+  color: #A3A3A3;
+}
+
+.empty-state h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #171717;
+  margin: 0 0 8px;
 }
 
 .empty-state p {
-  margin: 0 0 16px;
+  color: #737373;
+  margin: 0 0 20px;
+  font-size: 14px;
 }
 
 /* Modal Form */
@@ -1240,7 +1507,7 @@ onMounted(async () => {
 }
 
 /* Responsive */
-@media (max-width: 640px) {
+@media (max-width: 768px) {
   .tracking-plans-page {
     padding: 16px;
   }
@@ -1249,6 +1516,65 @@ onMounted(async () => {
     flex-direction: column;
     align-items: flex-start;
     gap: 16px;
+  }
+
+  .header-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .quick-stats {
+    flex-wrap: wrap;
+  }
+
+  .quick-stat {
+    flex: 1;
+    min-width: 100px;
+    padding: 12px 16px;
+  }
+
+  .quick-stat-value {
+    font-size: 24px;
+  }
+
+  .filters {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .filter-tabs {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .filter-right {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .filter-select,
+  .search-input-wrapper input {
+    width: 100%;
+  }
+
+  .plans-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .card-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .btn-view {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .action-buttons {
+    width: 100%;
+    justify-content: flex-end;
   }
 
   .filters {
