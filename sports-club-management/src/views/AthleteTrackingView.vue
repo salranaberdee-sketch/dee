@@ -88,163 +88,217 @@
 
           <!-- Expanded Content (Task 13.2 & 13.3) -->
           <div v-if="expandedPlanId === plan.id" class="plan-content">
-            <!-- Progress Cards for each field -->
-            <div class="progress-section">
-              <h4>ความคืบหน้าของคุณ</h4>
-              <div class="progress-grid">
-                <ProgressCard
-                  v-for="field in plan.fields"
-                  :key="field.id"
-                  :field-name="field.name"
-                  :unit="field.unit"
-                  :current-value="getFieldCurrentValue(plan, field)"
-                  :initial-value="getFieldInitialValue(plan, field)"
-                  :target-value="getFieldTargetValue(plan, field)"
-                  :percentage="getFieldProgress(plan, field)"
-                  :status="getFieldStatus(plan, field)"
-                  :days-remaining="getFieldDaysRemaining(plan, field)"
+            <!-- Inner Tabs Navigation -->
+            <div class="inner-tabs">
+              <button 
+                class="inner-tab" 
+                :class="{ active: activeInnerTab[plan.id] === 'progress' }"
+                @click="setInnerTab(plan.id, 'progress')"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                </svg>
+                ความคืบหน้า
+              </button>
+              <button 
+                class="inner-tab" 
+                :class="{ active: activeInnerTab[plan.id] === 'log' }"
+                @click="setInnerTab(plan.id, 'log')"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                  <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </svg>
+                บันทึกค่า
+              </button>
+              <button 
+                class="inner-tab" 
+                :class="{ active: activeInnerTab[plan.id] === 'history' }"
+                @click="setInnerTab(plan.id, 'history')"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                </svg>
+                ประวัติ
+                <span v-if="getPlanLogs(plan.id).length > 0" class="tab-badge">
+                  {{ getPlanLogs(plan.id).length }}
+                </span>
+              </button>
+            </div>
+
+            <!-- Tab Content: ความคืบหน้า -->
+            <div v-if="activeInnerTab[plan.id] === 'progress'" class="tab-content">
+              <!-- Progress Cards for each field -->
+              <div class="progress-section">
+                <div class="progress-grid">
+                  <ProgressCard
+                    v-for="field in plan.fields"
+                    :key="field.id"
+                    :field-name="field.name"
+                    :unit="field.unit"
+                    :current-value="getFieldCurrentValue(plan, field)"
+                    :initial-value="getFieldInitialValue(plan, field)"
+                    :target-value="getFieldTargetValue(plan, field)"
+                    :percentage="getFieldProgress(plan, field)"
+                    :status="getFieldStatus(plan, field)"
+                    :days-remaining="getFieldDaysRemaining(plan, field)"
+                  />
+                </div>
+              </div>
+
+              <!-- Chart Section -->
+              <div v-if="selectedFieldForChart && getPlanLogs(plan.id).length > 0" class="chart-section">
+                <div class="chart-header">
+                  <h4>กราฟความคืบหน้า</h4>
+                  <select v-model="selectedFieldForChart" class="field-select">
+                    <option v-for="field in plan.fields" :key="field.id" :value="field.id">
+                      {{ field.name }}
+                    </option>
+                  </select>
+                </div>
+                <ProgressChart
+                  :title="getSelectedFieldName(plan)"
+                  :unit="getSelectedFieldUnit(plan)"
+                  :chart-data="getChartDataForField(plan, selectedFieldForChart)"
+                  :target-value="getFieldTargetValue(plan, getFieldById(plan, selectedFieldForChart))"
+                  :initial-value="getFieldInitialValue(plan, getFieldById(plan, selectedFieldForChart))"
+                  :show-initial="true"
                 />
               </div>
-            </div>
-
-            <!-- Chart Section -->
-            <div v-if="selectedFieldForChart" class="chart-section">
-              <div class="chart-header">
-                <h4>กราฟความคืบหน้า</h4>
-                <select v-model="selectedFieldForChart" class="field-select">
-                  <option v-for="field in plan.fields" :key="field.id" :value="field.id">
-                    {{ field.name }}
-                  </option>
-                </select>
+              <div v-else-if="getPlanLogs(plan.id).length === 0" class="empty-chart-hint">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>
+                </svg>
+                <p>บันทึกค่าเพื่อดูกราฟความคืบหน้า</p>
               </div>
-              <ProgressChart
-                :title="getSelectedFieldName(plan)"
-                :unit="getSelectedFieldUnit(plan)"
-                :chart-data="getChartDataForField(plan, selectedFieldForChart)"
-                :target-value="getFieldTargetValue(plan, getFieldById(plan, selectedFieldForChart))"
-                :initial-value="getFieldInitialValue(plan, getFieldById(plan, selectedFieldForChart))"
-                :show-initial="true"
-              />
             </div>
 
-            <!-- Log Entry Form (Task 13.3) -->
-            <div class="log-section">
-              <h4>บันทึกค่าวันนี้</h4>
-              <form @submit.prevent="submitLog(plan)" class="log-form">
-                <div class="form-row">
-                  <div class="form-group">
-                    <label>วันที่</label>
-                    <input 
-                      type="date" 
-                      v-model="logForms[plan.id].log_date" 
-                      :max="today"
-                      required
-                    />
+            <!-- Tab Content: บันทึกค่า -->
+            <div v-if="activeInnerTab[plan.id] === 'log'" class="tab-content">
+              <div class="log-section">
+                <form @submit.prevent="submitLog(plan)" class="log-form">
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label>วันที่</label>
+                      <input 
+                        type="date" 
+                        v-model="logForms[plan.id].log_date" 
+                        :max="today"
+                        required
+                      />
+                    </div>
                   </div>
-                </div>
 
-                <div class="fields-grid">
-                  <div 
-                    v-for="field in plan.fields" 
-                    :key="field.id" 
-                    class="form-group"
-                  >
-                    <label>
-                      {{ field.name }}
-                      <span v-if="field.unit" class="unit-label">({{ field.unit }})</span>
-                      <span v-if="field.is_required" class="required">*</span>
-                    </label>
-                    <input 
-                      v-if="field.field_type === 'number' || field.field_type === 'reps' || field.field_type === 'distance'"
-                      type="number" 
-                      step="0.01"
-                      v-model="logForms[plan.id].values[field.id]"
-                      :placeholder="getFieldPlaceholder(field)"
-                      :required="field.is_required"
-                    />
-                    <input 
-                      v-else-if="field.field_type === 'time'"
-                      type="text" 
-                      v-model="logForms[plan.id].values[field.id]"
-                      placeholder="mm:ss"
-                      :required="field.is_required"
-                    />
-                    <select 
-                      v-else-if="field.field_type === 'select'"
-                      v-model="logForms[plan.id].values[field.id]"
-                      :required="field.is_required"
-                    >
-                      <option value="">เลือก...</option>
-                      <option v-for="opt in field.options" :key="opt" :value="opt">{{ opt }}</option>
-                    </select>
-                    <input 
-                      v-else
-                      type="text" 
-                      v-model="logForms[plan.id].values[field.id]"
-                      :placeholder="getFieldPlaceholder(field)"
-                      :required="field.is_required"
-                    />
-                  </div>
-                </div>
-
-                <div class="form-group">
-                  <label>หมายเหตุ</label>
-                  <textarea 
-                    v-model="logForms[plan.id].notes" 
-                    rows="2" 
-                    placeholder="หมายเหตุเพิ่มเติม..."
-                  ></textarea>
-                </div>
-
-                <div class="form-actions">
-                  <button type="button" class="btn-secondary" @click="resetLogForm(plan.id)">
-                    ล้างข้อมูล
-                  </button>
-                  <button type="submit" class="btn-primary" :disabled="savingLog">
-                    {{ savingLog ? 'กำลังบันทึก...' : 'บันทึก' }}
-                  </button>
-                </div>
-              </form>
-            </div>
-
-            <!-- Recent Logs -->
-            <div class="recent-logs-section">
-              <h4>ประวัติการบันทึกล่าสุด</h4>
-              <div v-if="getPlanLogs(plan.id).length > 0" class="logs-list">
-                <div 
-                  v-for="log in getPlanLogs(plan.id).slice(0, 5)" 
-                  :key="log.id" 
-                  class="log-item"
-                >
-                  <div class="log-header">
-                    <span class="log-date">{{ formatDate(log.log_date) }}</span>
-                    <button 
-                      v-if="canEditLogItem(log)" 
-                      class="btn-icon-sm" 
-                      @click="editLog(plan, log)"
-                      title="แก้ไข"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
-                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                      </svg>
-                    </button>
-                  </div>
-                  <div class="log-values">
-                    <span 
+                  <div class="fields-grid">
+                    <div 
                       v-for="field in plan.fields" 
                       :key="field.id" 
-                      class="log-value"
+                      class="form-group"
                     >
-                      <span class="value-label">{{ field.name }}:</span>
-                      <span class="value-data">{{ log.values?.[field.id] || '-' }} {{ field.unit }}</span>
-                    </span>
+                      <label>
+                        {{ field.name }}
+                        <span v-if="field.unit" class="unit-label">({{ field.unit }})</span>
+                        <span v-if="field.is_required" class="required">*</span>
+                      </label>
+                      <input 
+                        v-if="field.field_type === 'number' || field.field_type === 'reps' || field.field_type === 'distance'"
+                        type="number" 
+                        step="0.01"
+                        v-model="logForms[plan.id].values[field.id]"
+                        :placeholder="getFieldPlaceholder(field)"
+                        :required="field.is_required"
+                      />
+                      <input 
+                        v-else-if="field.field_type === 'time'"
+                        type="text" 
+                        v-model="logForms[plan.id].values[field.id]"
+                        placeholder="mm:ss"
+                        :required="field.is_required"
+                      />
+                      <select 
+                        v-else-if="field.field_type === 'select'"
+                        v-model="logForms[plan.id].values[field.id]"
+                        :required="field.is_required"
+                      >
+                        <option value="">เลือก...</option>
+                        <option v-for="opt in field.options" :key="opt" :value="opt">{{ opt }}</option>
+                      </select>
+                      <input 
+                        v-else
+                        type="text" 
+                        v-model="logForms[plan.id].values[field.id]"
+                        :placeholder="getFieldPlaceholder(field)"
+                        :required="field.is_required"
+                      />
+                    </div>
                   </div>
-                  <p v-if="log.notes" class="log-notes">{{ log.notes }}</p>
-                </div>
+
+                  <div class="form-group">
+                    <label>หมายเหตุ</label>
+                    <textarea 
+                      v-model="logForms[plan.id].notes" 
+                      rows="2" 
+                      placeholder="หมายเหตุเพิ่มเติม..."
+                    ></textarea>
+                  </div>
+
+                  <div class="form-actions">
+                    <button type="button" class="btn-secondary" @click="resetLogForm(plan.id)">
+                      ล้างข้อมูล
+                    </button>
+                    <button type="submit" class="btn-primary" :disabled="savingLog">
+                      {{ savingLog ? 'กำลังบันทึก...' : 'บันทึก' }}
+                    </button>
+                  </div>
+                </form>
               </div>
-              <div v-else class="empty-logs">
-                <p>ยังไม่มีประวัติการบันทึก</p>
+            </div>
+
+            <!-- Tab Content: ประวัติ -->
+            <div v-if="activeInnerTab[plan.id] === 'history'" class="tab-content">
+              <div class="recent-logs-section">
+                <div v-if="getPlanLogs(plan.id).length > 0" class="logs-list">
+                  <div 
+                    v-for="log in getPlanLogs(plan.id)" 
+                    :key="log.id" 
+                    class="log-item"
+                  >
+                    <div class="log-header">
+                      <span class="log-date">{{ formatDate(log.log_date) }}</span>
+                      <button 
+                        v-if="canEditLogItem(log)" 
+                        class="btn-icon-sm" 
+                        @click="editLogAndSwitchTab(plan, log)"
+                        title="แก้ไข"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                          <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        </svg>
+                      </button>
+                    </div>
+                    <div class="log-values">
+                      <span 
+                        v-for="field in plan.fields" 
+                        :key="field.id" 
+                        class="log-value"
+                      >
+                        <span class="value-label">{{ field.name }}:</span>
+                        <span class="value-data">{{ log.values?.[field.id] || '-' }} {{ field.unit }}</span>
+                      </span>
+                    </div>
+                    <p v-if="log.notes" class="log-notes">{{ log.notes }}</p>
+                  </div>
+                </div>
+                <div v-else class="empty-logs">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                  </svg>
+                  <p>ยังไม่มีประวัติการบันทึก</p>
+                  <button class="btn-secondary" @click="setInnerTab(plan.id, 'log')">
+                    บันทึกค่าตอนนี้
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -279,6 +333,7 @@ const selectedFieldForChart = ref(null)
 const myPlans = ref([])
 const planLogs = ref({}) // { planId: logs[] }
 const logForms = reactive({}) // { planId: { log_date, values, notes } }
+const activeInnerTab = ref({}) // { planId: 'progress' | 'log' | 'history' }
 
 // Computed
 const today = computed(() => new Date().toISOString().split('T')[0])
@@ -457,6 +512,10 @@ function togglePlan(planId) {
     selectedFieldForChart.value = null
   } else {
     expandedPlanId.value = planId
+    // ตั้งค่า tab เริ่มต้น
+    if (!activeInnerTab.value[planId]) {
+      activeInnerTab.value[planId] = 'progress'
+    }
     // ตั้งค่าฟิลด์แรกสำหรับกราฟ
     const plan = myPlans.value.find(p => p.id === planId)
     if (plan?.fields?.length > 0) {
@@ -465,6 +524,11 @@ function togglePlan(planId) {
     // โหลด logs ของแผน
     loadPlanLogs(planId)
   }
+}
+
+// เปลี่ยน tab ภายใน plan card
+function setInnerTab(planId, tab) {
+  activeInnerTab.value[planId] = tab
 }
 
 // เริ่มต้น log form สำหรับแผน
@@ -505,6 +569,12 @@ function editLog(plan, log) {
     values: { ...log.values },
     notes: log.notes || ''
   }
+}
+
+// แก้ไข log และสลับไปแท็บบันทึก
+function editLogAndSwitchTab(plan, log) {
+  editLog(plan, log)
+  setInnerTab(plan.id, 'log')
 }
 
 // บันทึก log
@@ -834,12 +904,103 @@ onMounted(() => {
   border-top: 1px solid #F5F5F5;
 }
 
-/* Progress Section */
-.progress-section {
-  margin-top: 20px;
+/* Inner Tabs */
+.inner-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 16px 0;
+  border-bottom: 1px solid #E5E5E5;
+  margin-bottom: 16px;
 }
 
-.progress-section h4,
+.inner-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  background: transparent;
+  border: 1px solid #E5E5E5;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #525252;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.inner-tab svg {
+  width: 16px;
+  height: 16px;
+}
+
+.inner-tab:hover {
+  background: #F5F5F5;
+  color: #171717;
+}
+
+.inner-tab.active {
+  background: #171717;
+  border-color: #171717;
+  color: #fff;
+}
+
+.inner-tab.active svg {
+  color: #fff;
+}
+
+.tab-badge {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.inner-tab:not(.active) .tab-badge {
+  background: #E5E5E5;
+  color: #525252;
+}
+
+/* Tab Content */
+.tab-content {
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Empty Chart Hint */
+.empty-chart-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background: #FAFAFA;
+  border-radius: 12px;
+  color: #A3A3A3;
+  margin-top: 16px;
+}
+
+.empty-chart-hint svg {
+  width: 40px;
+  height: 40px;
+  margin-bottom: 8px;
+  opacity: 0.5;
+}
+
+.empty-chart-hint p {
+  margin: 0;
+  font-size: 14px;
+}
+
+/* Progress Section */
+.progress-section {
+  margin-top: 0;
+}
+
 .chart-section h4,
 .log-section h4,
 .recent-logs-section h4 {
@@ -877,7 +1038,6 @@ onMounted(() => {
 
 /* Log Section */
 .log-section {
-  margin-top: 24px;
   padding: 20px;
   background: #FAFAFA;
   border-radius: 12px;
@@ -1004,7 +1164,7 @@ onMounted(() => {
 
 /* Recent Logs Section */
 .recent-logs-section {
-  margin-top: 24px;
+  margin-top: 0;
 }
 
 .logs-list {
@@ -1060,10 +1220,31 @@ onMounted(() => {
 }
 
 .empty-logs {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   text-align: center;
-  padding: 24px;
+  padding: 40px 24px;
   color: #A3A3A3;
   font-size: 14px;
+  background: #FAFAFA;
+  border-radius: 12px;
+}
+
+.empty-logs svg {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 12px;
+  opacity: 0.4;
+}
+
+.empty-logs p {
+  margin: 0 0 16px;
+}
+
+.empty-logs .btn-secondary {
+  margin-top: 8px;
 }
 
 /* Responsive */
@@ -1087,6 +1268,23 @@ onMounted(() => {
     font-size: 12px;
   }
 
+  .inner-tabs {
+    overflow-x: auto;
+    padding-bottom: 8px;
+    margin-bottom: 12px;
+  }
+
+  .inner-tab {
+    padding: 8px 12px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .inner-tab svg {
+    width: 14px;
+    height: 14px;
+  }
+
   .progress-grid {
     grid-template-columns: 1fr;
   }
@@ -1101,6 +1299,11 @@ onMounted(() => {
 
   .form-actions button {
     width: 100%;
+  }
+
+  .log-values {
+    flex-direction: column;
+    gap: 6px;
   }
 }
 </style>
