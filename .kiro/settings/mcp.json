@@ -20,7 +20,9 @@
         "deploy_edge_function",
         "list_edge_functions",
         "get_edge_function",
-        "list_migrations"
+        "list_migrations",
+        "pause_project",
+        "restore_project"
       ]
     }
   }

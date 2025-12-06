@@ -1,7 +1,7 @@
 <template>
   <div class="athlete-performance">
     <!-- Back Button -->
-    <router-link to="/evaluation" class="back-link">
+    <router-link :to="backRoute" class="back-link">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M15 18l-6-6 6-6"/>
       </svg>
@@ -596,6 +596,14 @@ const selectedMonth = ref(new Date().toISOString().slice(0, 7))
 const scoreBreakdown = ref(null)
 const activityFilter = ref('all')
 
+// กำหนด back route ตาม role
+const backRoute = computed(() => {
+  if (authStore.isAthlete) {
+    return '/profile'
+  }
+  return '/evaluation'
+})
+
 function getTierLabel(tier) {
   return evaluationStore.getTierLabel(tier)
 }
@@ -807,11 +815,15 @@ async function loadData() {
       athleteId.value = route.params.id
     } else {
       // หา athlete id จาก user_id (สำหรับ athlete ดูผลงานตัวเอง)
-      const { data: myAthlete } = await supabase
+      const { data: myAthlete, error: athleteError } = await supabase
         .from('athletes')
         .select('id')
         .eq('user_id', authStore.user?.id)
         .single()
+      
+      if (athleteError) {
+        console.error('ไม่สามารถดึงข้อมูลนักกีฬา:', athleteError)
+      }
       
       if (myAthlete) {
         athleteId.value = myAthlete.id
