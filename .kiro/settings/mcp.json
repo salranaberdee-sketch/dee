@@ -22,7 +22,8 @@
         "get_edge_function",
         "list_migrations",
         "pause_project",
-        "restore_project"
+        "restore_project",
+        "generate_typescript_types"
       ]
     }
   }

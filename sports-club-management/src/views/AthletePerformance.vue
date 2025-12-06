@@ -786,11 +786,11 @@ onMounted(() => {
 
 /* Hero Section */
 .hero-section {
-  background: linear-gradient(135deg, #171717 0%, #262626 100%);
-  color: #fff;
+  background: #FFFFFF;
+  color: #171717;
   padding: 3rem 2rem 4rem;
   position: relative;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid #F5F5F5;
 }
 
 .back-btn {
@@ -800,19 +800,19 @@ onMounted(() => {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(10px);
+  background: #FAFAFA;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: #171717;
   text-decoration: none;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid #F5F5F5;
 }
 
 .back-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: #171717;
+  color: #fff;
   transform: translateX(-2px);
 }
 
@@ -838,14 +838,14 @@ onMounted(() => {
   width: 80px;
   height: 80px;
   border-radius: 50%;
-  background: #fff;
-  color: #171717;
+  background: #171717;
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 2rem;
   font-weight: 700;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
 }
 
 .athlete-info h1 {
@@ -853,10 +853,11 @@ onMounted(() => {
   font-weight: 700;
   margin: 0;
   letter-spacing: -0.02em;
+  color: #171717;
 }
 
 .athlete-info p {
-  color: rgba(255, 255, 255, 0.6);
+  color: #737373;
   margin: 0.5rem 0 0;
   font-size: 0.9375rem;
 }
@@ -880,11 +881,12 @@ onMounted(() => {
   font-weight: 700;
   line-height: 1;
   letter-spacing: -0.03em;
+  color: #171717;
 }
 
 .score-text {
   font-size: 0.9375rem;
-  opacity: 0.6;
+  color: #737373;
   margin-top: 0.75rem;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -896,7 +898,7 @@ onMounted(() => {
   font-weight: 600;
   font-size: 1.0625rem;
   letter-spacing: -0.01em;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
 }
 
 .tier-badge.excellent { background: #D1FAE5; color: #065F46; }
@@ -916,10 +918,9 @@ onMounted(() => {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(10px);
-  color: #fff;
+  border: 1px solid #E5E5E5;
+  background: #FAFAFA;
+  color: #171717;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -928,8 +929,9 @@ onMounted(() => {
 }
 
 .month-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.25);
+  background: #171717;
+  color: #fff;
+  border-color: #171717;
   transform: scale(1.05);
 }
 
@@ -944,6 +946,7 @@ onMounted(() => {
   min-width: 200px;
   text-align: center;
   letter-spacing: -0.01em;
+  color: #171717;
 }
 
 .quick-stats {
@@ -958,33 +961,35 @@ onMounted(() => {
   align-items: center;
   gap: 0.75rem;
   padding: 1.5rem 1rem;
-  background: rgba(255, 255, 255, 0.08);
+  background: #FAFAFA;
   border-radius: 16px;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid #F5F5F5;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .stat-item:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: #fff;
+  border-color: #E5E5E5;
   transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
 }
 
 .stat-item svg {
   width: 28px;
   height: 28px;
-  opacity: 0.9;
+  color: #171717;
 }
 
 .stat-value {
   font-size: 1.75rem;
   font-weight: 700;
   letter-spacing: -0.02em;
+  color: #171717;
 }
 
 .stat-label {
   font-size: 0.8125rem;
-  opacity: 0.7;
+  color: #737373;
   letter-spacing: 0.02em;
 }
 
