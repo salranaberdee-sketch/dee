@@ -23,10 +23,14 @@ const routes = [
   { path: '/tournaments', name: 'Tournaments', component: () => import('@/views/Tournaments.vue'), meta: { requiresAuth: true } },
   { path: '/tournament-history', name: 'TournamentHistory', component: () => import('@/views/TournamentHistory.vue'), meta: { requiresAuth: true, roles: ['admin'] } },
   
+  // Scoring Hub - ศูนย์รวมระบบคะแนน (3-Second Comprehension)
+  { path: '/scoring-hub', name: 'ScoringHub', component: () => import('@/views/ScoringHub.vue'), meta: { requiresAuth: true, roles: ['admin', 'coach'] } },
+  
   // Flexible Scoring System - Admin & Coach (Requirements 1.1, 2.1, 8.1)
   { path: '/scoring-config', name: 'ScoringConfig', component: () => import('@/views/ScoringConfigView.vue'), meta: { requiresAuth: true, roles: ['admin', 'coach'] } },
   { path: '/scoring-config/history', name: 'ScoringConfigHistory', component: () => import('@/views/ScoringConfigHistoryView.vue'), meta: { requiresAuth: true, roles: ['admin', 'coach'] } },
   { path: '/score-calculator', name: 'ScoreCalculator', component: () => import('@/views/ScoreCalculatorView.vue'), meta: { requiresAuth: true, roles: ['admin', 'coach'] } },
+  { path: '/scoring-conditions', name: 'ScoringConditions', component: () => import('@/views/ScoringConditionsView.vue'), meta: { requiresAuth: true, roles: ['admin', 'coach'] } },
   
   // Athlete Progress Tracking - แผนพัฒนานักกีฬา
   { path: '/training-plans', name: 'TrainingPlans', component: () => import('@/views/TrainingPlansView.vue'), meta: { requiresAuth: true, roles: ['admin', 'coach'] } },

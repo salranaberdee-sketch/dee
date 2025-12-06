@@ -3,6 +3,11 @@
     <!-- Header -->
     <div class="page-header">
       <div class="header-left">
+        <router-link to="/scoring-hub" class="back-link">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+        </router-link>
         <h1>ประเมินผลนักกีฬา</h1>
         <div class="month-selector">
           <input 
@@ -344,6 +349,33 @@ onMounted(() => {
   margin-bottom: 1rem;
   flex-wrap: wrap;
   gap: 1rem;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.back-link {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #F5F5F5;
+  border-radius: 8px;
+  color: #525252;
+  flex-shrink: 0;
+}
+
+.back-link:hover {
+  background: #E5E5E5;
+}
+
+.back-link svg {
+  width: 18px;
+  height: 18px;
 }
 
 .header-left h1 {

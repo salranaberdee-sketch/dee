@@ -61,15 +61,15 @@ const quickActionGroups = computed(() => {
           { icon: 'medal', label: 'โค้ช', to: '/coaches' },
           { icon: 'users', label: 'นักกีฬา', to: '/athletes' },
           { icon: 'category', label: 'หมวดหมู่', to: '/category-management' },
+          { icon: 'file', label: 'ใบสมัคร', to: '/club-applications' },
         ]
       },
       {
         title: 'ประเมินและพัฒนา',
         actions: [
-          { icon: 'chart', label: 'ประเมินผล', to: '/evaluation' },
+          { icon: 'chart', label: 'ศูนย์คะแนน', to: '/scoring-hub' },
           { icon: 'progress', label: 'แผนพัฒนา', to: '/training-plans' },
           { icon: 'tracking', label: 'ติดตามค่าตัวเลข', to: '/tracking' },
-          { icon: 'scoring', label: 'เกณฑ์คะแนน', to: '/scoring-config' },
         ]
       },
       {
@@ -80,6 +80,8 @@ const quickActionGroups = computed(() => {
           { icon: 'star', label: 'กิจกรรม', to: '/events' },
           { icon: 'calendar', label: 'ตารางนัดหมาย', to: '/schedules' },
           { icon: 'facility', label: 'สถานที่', to: '/facilities' },
+          { icon: 'facilityManage', label: 'จัดการสถานที่', to: '/facility-manage' },
+          { icon: 'booking', label: 'จัดการการจอง', to: '/booking-manage' },
         ]
       },
       {
@@ -99,9 +101,10 @@ const quickActionGroups = computed(() => {
         title: 'จัดการนักกีฬา',
         actions: [
           { icon: 'users', label: 'นักกีฬา', to: '/athletes' },
-          { icon: 'chart', label: 'ประเมินผล', to: '/evaluation' },
+          { icon: 'chart', label: 'ศูนย์คะแนน', to: '/scoring-hub' },
           { icon: 'progress', label: 'แผนพัฒนา', to: '/training-plans' },
           { icon: 'tracking', label: 'ติดตามค่าตัวเลข', to: '/tracking' },
+          { icon: 'evaluation', label: 'ประเมินผล', to: '/evaluation' },
         ]
       },
       {
@@ -111,28 +114,37 @@ const quickActionGroups = computed(() => {
           { icon: 'star', label: 'กิจกรรม', to: '/events' },
           { icon: 'calendar', label: 'ตารางนัดหมาย', to: '/schedules' },
           { icon: 'facility', label: 'สถานที่', to: '/facilities' },
+          { icon: 'booking', label: 'จัดการการจอง', to: '/booking-manage' },
           { icon: 'megaphone', label: 'ประกาศ', to: '/announcements' },
         ]
       },
       {
         title: 'เครื่องมือ',
         actions: [
-          { icon: 'scoring', label: 'เกณฑ์คะแนน', to: '/scoring-config' },
-          { icon: 'calculator', label: 'คำนวณคะแนน', to: '/score-calculator' },
+          { icon: 'checklist', label: 'เช็คชื่อ', to: '/attendance' },
           { icon: 'album', label: 'จัดการอัลบั้ม', to: '/albums' },
           { icon: 'clipboard', label: 'บันทึกฝึกซ้อม', to: '/training-logs' },
+          { icon: 'file', label: 'ใบสมัคร', to: '/club-applications' },
         ]
       }
     ]
   }
-  // Athlete - รวมเป็นกลุ่มเดียว เลือกเฉพาะที่ใช้บ่อย
+  // Athlete - แบ่งเป็น 2 กลุ่ม
   return [
     {
-      title: 'เมนูหลัก',
+      title: 'ข้อมูลของฉัน',
       actions: [
         { icon: 'chart', label: 'ผลงานของฉัน', to: '/my-performance' },
         { icon: 'tracking', label: 'ติดตามความคืบหน้า', to: '/my-tracking' },
         { icon: 'clipboard', label: 'บันทึกฝึกซ้อม', to: '/training-logs' },
+        { icon: 'file', label: 'ใบสมัครของฉัน', to: '/my-applications' },
+        { icon: 'leave', label: 'ขอลา', to: '/leave-request' },
+        { icon: 'booking', label: 'การจองของฉัน', to: '/my-bookings' },
+      ]
+    },
+    {
+      title: 'กิจกรรมและข่าวสาร',
+      actions: [
         { icon: 'calendar', label: 'ตารางนัดหมาย', to: '/schedules' },
         { icon: 'facility', label: 'สถานที่', to: '/facilities' },
         { icon: 'trophy', label: 'ทัวร์นาเมนต์', to: '/tournaments' },
@@ -251,6 +263,9 @@ const toggleGroup = (groupIndex) => {
               <svg v-else-if="action.icon === 'history'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
               <svg v-else-if="action.icon === 'album'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
               <svg v-else-if="action.icon === 'facility'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+              <svg v-else-if="action.icon === 'facilityManage'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+              <svg v-else-if="action.icon === 'booking'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M9 16l2 2 4-4"/></svg>
+              <svg v-else-if="action.icon === 'evaluation'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
             </span>
             <span class="quick-label">{{ action.label }}</span>
           </button>

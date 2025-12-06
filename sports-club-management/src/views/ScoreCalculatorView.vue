@@ -3,7 +3,7 @@
     <!-- Header -->
     <div class="page-header">
       <div class="header-content">
-        <router-link to="/evaluation" class="back-link">
+        <router-link to="/scoring-hub" class="back-link">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M19 12H5M12 19l-7-7 7-7"/>
           </svg>
@@ -39,8 +39,8 @@
           </svg>
           ไปตั้งค่าเกณฑ์
         </router-link>
-        <router-link to="/evaluation" class="btn-secondary">
-          กลับหน้าประเมิน
+        <router-link to="/scoring-hub" class="btn-secondary">
+          กลับศูนย์คะแนน
         </router-link>
       </div>
     </div>
