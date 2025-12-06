@@ -198,27 +198,63 @@
             </div>
           </div>
 
-          <!-- Fields Preview (เฉพาะตอนสร้างใหม่) -->
-          <div v-if="modalMode === 'create' && form.fields.length > 0" class="form-group">
-            <label>ฟิลด์ที่จะติดตาม</label>
-            <div class="fields-preview">
-              <div v-for="(field, index) in form.fields" :key="index" class="field-item">
-                <div class="field-info">
+          <!-- Fields Selection (เฉพาะตอนสร้างใหม่) -->
+          <div v-if="modalMode === 'create'" class="form-group">
+            <label>ฟิลด์ที่จะติดตาม (เลือกหรือเพิ่มเอง)</label>
+            
+            <!-- ฟิลด์จาก Template ให้เลือก -->
+            <div v-if="selectedTemplate !== 'custom' && templateFields.length > 0" class="template-fields-select">
+              <div class="select-header">
+                <span>ฟิลด์จากแม่แบบ</span>
+                <div class="select-actions">
+                  <button type="button" class="btn-link" @click="selectAllTemplateFields">เลือกทั้งหมด</button>
+                  <button type="button" class="btn-link" @click="deselectAllTemplateFields">ยกเลิกทั้งหมด</button>
+                </div>
+              </div>
+              <div class="template-fields-list">
+                <label 
+                  v-for="(field, index) in templateFields" 
+                  :key="'tpl-' + index" 
+                  class="field-checkbox"
+                  :class="{ selected: isFieldSelected(field) }"
+                >
+                  <input 
+                    type="checkbox" 
+                    :checked="isFieldSelected(field)"
+                    @change="toggleTemplateField(field)"
+                  />
                   <span class="field-name">{{ field.name }}</span>
                   <span class="field-type">{{ getFieldTypeName(field.field_type) }}</span>
                   <span v-if="field.unit" class="field-unit">({{ field.unit }})</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- ฟิลด์ที่เลือกแล้ว + ฟิลด์ที่เพิ่มเอง -->
+            <div v-if="form.fields.length > 0" class="selected-fields">
+              <div class="select-header">
+                <span>ฟิลด์ที่เลือก ({{ form.fields.length }})</span>
+              </div>
+              <div class="fields-preview">
+                <div v-for="(field, index) in form.fields" :key="index" class="field-item">
+                  <div class="field-info">
+                    <span class="field-name">{{ field.name }}</span>
+                    <span class="field-type">{{ getFieldTypeName(field.field_type) }}</span>
+                    <span v-if="field.unit" class="field-unit">({{ field.unit }})</span>
+                    <span v-if="field.isCustom" class="field-custom-badge">เพิ่มเอง</span>
+                  </div>
+                  <button type="button" class="btn-remove" @click="removeField(index)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                  </button>
                 </div>
-                <button v-if="selectedTemplate === 'custom'" type="button" class="btn-remove" @click="removeField(index)">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                  </svg>
-                </button>
               </div>
             </div>
           </div>
 
-          <!-- Add Custom Field (เฉพาะ custom template) -->
-          <div v-if="modalMode === 'create' && selectedTemplate === 'custom'" class="add-field-section">
+          <!-- Add Custom Field (ใช้ได้ทุก template) -->
+          <div v-if="modalMode === 'create'" class="add-field-section">
             <div class="add-field-form">
               <input type="text" v-model="newField.name" placeholder="ชื่อฟิลด์">
               <select v-model="newField.field_type">
@@ -356,6 +392,43 @@ const isFormValid = computed(() => {
          (modalMode.value === 'edit' || form.value.fields.length > 0)
 })
 
+// ฟิลด์จาก template ที่เลือก
+const templateFields = computed(() => {
+  if (selectedTemplate.value === 'custom') return []
+  return templates[selectedTemplate.value]?.fields || []
+})
+
+// ตรวจสอบว่าฟิลด์ถูกเลือกหรือไม่
+function isFieldSelected(field) {
+  return form.value.fields.some(f => f.name === field.name && !f.isCustom)
+}
+
+// เลือก/ยกเลิกฟิลด์จาก template
+function toggleTemplateField(field) {
+  const index = form.value.fields.findIndex(f => f.name === field.name && !f.isCustom)
+  if (index === -1) {
+    // เพิ่มฟิลด์
+    form.value.fields.push({ ...field, isCustom: false })
+  } else {
+    // ลบฟิลด์
+    form.value.fields.splice(index, 1)
+  }
+}
+
+// เลือกทั้งหมดจาก template
+function selectAllTemplateFields() {
+  templateFields.value.forEach(field => {
+    if (!isFieldSelected(field)) {
+      form.value.fields.push({ ...field, isCustom: false })
+    }
+  })
+}
+
+// ยกเลิกทั้งหมดจาก template
+function deselectAllTemplateFields() {
+  form.value.fields = form.value.fields.filter(f => f.isCustom)
+}
+
 // Helper Functions
 function getPlanTypeName(type) {
   const types = {
@@ -446,11 +519,18 @@ function closeModal() {
 function selectTemplate(templateKey) {
   selectedTemplate.value = templateKey
   
+  // เก็บฟิลด์ที่เพิ่มเองไว้
+  const customFields = form.value.fields.filter(f => f.isCustom)
+  
   if (templateKey === 'custom') {
-    form.value.fields = []
+    form.value.fields = customFields
     form.value.plan_type = 'general'
   } else if (templates[templateKey]) {
-    form.value.fields = [...templates[templateKey].fields]
+    // เลือกทุกฟิลด์จาก template + ฟิลด์ที่เพิ่มเอง
+    form.value.fields = [
+      ...templates[templateKey].fields.map(f => ({ ...f, isCustom: false })),
+      ...customFields
+    ]
     form.value.plan_type = templateKey
   }
 }
@@ -458,11 +538,18 @@ function selectTemplate(templateKey) {
 function addField() {
   if (!newField.value.name) return
   
+  // ตรวจสอบว่าชื่อซ้ำหรือไม่
+  if (form.value.fields.some(f => f.name === newField.value.name)) {
+    alert('มีฟิลด์ชื่อนี้อยู่แล้ว')
+    return
+  }
+  
   form.value.fields.push({
     name: newField.value.name,
     field_type: newField.value.field_type,
     unit: newField.value.unit,
-    is_required: newField.value.is_required
+    is_required: newField.value.is_required,
+    isCustom: true // mark ว่าเป็นฟิลด์ที่เพิ่มเอง
   })
   
   // รีเซ็ตฟอร์ม
@@ -949,6 +1036,87 @@ onMounted(async () => {
 .template-fields {
   font-size: 12px;
   color: #737373;
+}
+
+/* Template Fields Selection */
+.template-fields-select,
+.selected-fields {
+  margin-bottom: 12px;
+}
+
+.select-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #525252;
+}
+
+.select-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: #525252;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.btn-link:hover {
+  color: #171717;
+  text-decoration: underline;
+}
+
+.template-fields-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 150px;
+  overflow-y: auto;
+  padding: 8px;
+  background: #FAFAFA;
+  border-radius: 8px;
+}
+
+.field-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid #E5E5E5;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.field-checkbox:hover {
+  border-color: #A3A3A3;
+}
+
+.field-checkbox.selected {
+  border-color: #171717;
+  background: #F5F5F5;
+}
+
+.field-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #171717;
+}
+
+.field-custom-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  background: #171717;
+  color: #fff;
+  border-radius: 4px;
+  margin-left: auto;
 }
 
 /* Fields Preview */
