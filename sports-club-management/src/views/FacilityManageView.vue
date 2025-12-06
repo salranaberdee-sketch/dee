@@ -336,8 +336,6 @@ onMounted(() => {
         เพิ่มสถานที่แรก
       </button>
     </div>
-</template>
-
 
     <!-- Create/Edit Modal -->
     <Modal :show="showModal" @close="showModal = false">
