@@ -27,8 +27,21 @@
         </div>
         <div class="form-group">
           <label>เวลาสิ้นสุด</label>
-          <input type="text" :value="form.end_time" disabled />
+          <select v-model="form.end_time" required :disabled="!form.start_time">
+            <option value="">เลือก...</option>
+            <option v-for="time in endTimeOptions" :key="time" :value="time">
+              {{ time }}
+            </option>
+          </select>
         </div>
+      </div>
+      
+      <!-- คำเตือนการชนกัน -->
+      <div v-if="timeWarning" class="time-warning">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+        </svg>
+        <span>{{ timeWarning }}</span>
       </div>
 
       <!-- จุดประสงค์ -->
@@ -103,11 +116,14 @@ const props = defineProps({
 
 const emit = defineEmits(['submit', 'cancel'])
 
-// State
+// ค่าเริ่มต้น
+const DEFAULT_END_TIME = '18:00'
+
+// State - ตั้งค่าเริ่มต้นให้พร้อมใช้งานทันที
 const form = ref({
-  booking_date: '',
+  booking_date: new Date().toISOString().split('T')[0],
   start_time: '',
-  end_time: '',
+  end_time: DEFAULT_END_TIME,
   purpose: ''
 })
 const isRecurring = ref(false)
@@ -131,17 +147,72 @@ const availableSlots = computed(() => {
     .sort((a, b) => a.start.localeCompare(b.start))
 })
 
+// สร้างตัวเลือกเวลาสิ้นสุด (ทุก 30 นาที หลังจากเวลาเริ่ม)
+const endTimeOptions = computed(() => {
+  if (!form.value.start_time) return []
+  
+  const options = []
+  const [startHour, startMin] = form.value.start_time.split(':').map(Number)
+  
+  // สร้างตัวเลือกทุก 30 นาที ตั้งแต่ 30 นาทีหลังเริ่ม จนถึง 23:30
+  let hour = startHour
+  let min = startMin + 30
+  
+  if (min >= 60) {
+    min -= 60
+    hour += 1
+  }
+  
+  while (hour < 24) {
+    const timeStr = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`
+    options.push(timeStr)
+    
+    min += 30
+    if (min >= 60) {
+      min -= 60
+      hour += 1
+    }
+  }
+  
+  return options
+})
+
+// คำเตือนเมื่อเวลาไม่ถูกต้อง
+const timeWarning = computed(() => {
+  if (!form.value.start_time || !form.value.end_time) return null
+  if (form.value.end_time <= form.value.start_time) {
+    return 'เวลาสิ้นสุดต้องมากกว่าเวลาเริ่ม'
+  }
+  return null
+})
+
 const isValid = computed(() => {
   return form.value.booking_date && 
          form.value.start_time && 
-         form.value.end_time
+         form.value.end_time &&
+         form.value.end_time > form.value.start_time
 })
 
-// Watch: อัปเดต end_time เมื่อเลือก start_time
+// Watch: ตั้งค่า end_time เริ่มต้นเมื่อเปลี่ยน start_time
 watch(() => form.value.start_time, (newVal) => {
-  const slot = availableSlots.value.find(s => s.start === newVal)
-  form.value.end_time = slot?.end || ''
+  if (newVal) {
+    // ถ้าเวลาเริ่มมากกว่าหรือเท่ากับ 18:00 ให้ตั้งเป็น 1 ชม. หลังเวลาเริ่ม
+    const [hour] = newVal.split(':').map(Number)
+    if (hour >= 18) {
+      const endHour = Math.min(hour + 1, 23)
+      form.value.end_time = `${endHour.toString().padStart(2, '0')}:00`
+    } else {
+      form.value.end_time = DEFAULT_END_TIME
+    }
+  }
 })
+
+// Watch: ตั้งค่า start_time เริ่มต้นเมื่อมี availableSlots
+watch(availableSlots, (slots) => {
+  if (slots.length > 0 && !form.value.start_time) {
+    form.value.start_time = slots[0].start
+  }
+}, { immediate: true })
 
 // Watch: อัปเดตจาก selectedSlot
 watch(() => props.selectedSlot, (newVal) => {
@@ -331,5 +402,24 @@ function handleSubmit() {
 
 .btn-secondary:hover {
   background: #F5F5F5;
+}
+
+.time-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #FEF3C7;
+  border: 1px solid #F59E0B;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  color: #92400E;
+  font-size: 13px;
+}
+
+.time-warning svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
 }
 </style>

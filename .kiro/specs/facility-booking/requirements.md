@@ -26,14 +26,16 @@
 
 ### Requirement 2
 
-**User Story:** As an athlete, I want to create a booking request, so that I can reserve a facility for my training.
+**User Story:** As a user, I want to create a booking request, so that I can reserve a facility for my training or activities.
 
 #### Acceptance Criteria
 
 1. WHEN an athlete selects a facility and chooses a date and time slot THEN the System SHALL create a booking request with status "pending"
-2. WHEN an athlete submits a booking request THEN the System SHALL validate that the time slot is not already booked
-3. IF an athlete attempts to book an already reserved time slot THEN the System SHALL display an error message and prevent the booking
-4. WHEN a booking is created THEN the System SHALL send a notification to coaches and admins
+2. WHEN an admin or coach selects a facility and chooses a date and time slot THEN the System SHALL create a booking with status "approved" automatically (auto-approval)
+3. WHEN an admin or coach booking is auto-approved THEN the System SHALL record the approver_id and approved_at timestamp
+4. WHEN a user submits a booking request THEN the System SHALL validate that the time slot is not already booked
+5. IF a user attempts to book an already reserved time slot THEN the System SHALL display an error message and prevent the booking
+6. WHEN an athlete booking is created THEN the System SHALL send a notification to coaches and admins
 
 ### Requirement 3
 

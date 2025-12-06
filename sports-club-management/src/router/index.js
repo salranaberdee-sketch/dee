@@ -64,6 +64,7 @@ const routes = [
   { path: '/facilities/:id', name: 'FacilityDetail', component: () => import('@/views/FacilityDetailView.vue'), meta: { requiresAuth: true } },
   { path: '/my-bookings', name: 'MyBookings', component: () => import('@/views/MyBookingsView.vue'), meta: { requiresAuth: true } },
   { path: '/booking-manage', name: 'BookingManage', component: () => import('@/views/BookingManageView.vue'), meta: { requiresAuth: true, roles: ['admin', 'coach'] } },
+  { path: '/facility-manage', name: 'FacilityManage', component: () => import('@/views/FacilityManageView.vue'), meta: { requiresAuth: true, roles: ['admin'] } },
 ]
 
 const router = createRouter({ history: createWebHistory(), routes })

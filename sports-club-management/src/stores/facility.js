@@ -46,20 +46,27 @@ export const useFacilityStore = defineStore('facility', () => {
 
   /**
    * ดึงรายการสถานที่ทั้งหมด
+   * @param {boolean} includeInactive - รวมสถานที่ที่ปิดใช้งาน (สำหรับ admin)
    */
-  async function fetchFacilities() {
+  async function fetchFacilities(includeInactive = false) {
     loading.value = true
     error.value = null
 
     try {
-      const { data, error: fetchError } = await supabase
+      let query = supabase
         .from('facilities')
         .select(`
           *,
           time_slots:facility_time_slots(*)
         `)
-        .eq('is_active', true)
         .order('name')
+
+      // ถ้าไม่ใช่ admin หรือไม่ต้องการดูที่ปิดใช้งาน ให้กรองเฉพาะ active
+      if (!includeInactive) {
+        query = query.eq('is_active', true)
+      }
+
+      const { data, error: fetchError } = await query
 
       if (fetchError) throw fetchError
       facilities.value = data || []
@@ -123,6 +130,8 @@ export const useFacilityStore = defineStore('facility', () => {
 
   /**
    * สร้างการจองใหม่
+   * - Admin/Coach: อนุมัติอัตโนมัติ (status = 'approved')
+   * - Athlete: รออนุมัติ (status = 'pending')
    */
   async function createBooking(bookingData) {
     loading.value = true
@@ -141,13 +150,30 @@ export const useFacilityStore = defineStore('facility', () => {
         return { success: false, message: 'ช่วงเวลานี้ถูกจองแล้ว' }
       }
 
+      // ตรวจสอบ role ของผู้ใช้
+      const userRole = authStore.profile?.role
+      const isAdminOrCoach = userRole === 'admin' || userRole === 'coach'
+
+      // สร้าง payload เฉพาะ fields ที่มีใน database (ไม่รวม isRecurring, weeks)
+      const bookingPayload = {
+        facility_id: bookingData.facility_id,
+        booking_date: bookingData.booking_date,
+        start_time: bookingData.start_time,
+        end_time: bookingData.end_time,
+        purpose: bookingData.purpose || null,
+        athlete_id: authStore.user?.id,
+        status: isAdminOrCoach ? 'approved' : 'pending'
+      }
+
+      // ถ้าเป็น Admin/Coach ให้บันทึกผู้อนุมัติด้วย
+      if (isAdminOrCoach) {
+        bookingPayload.approved_by = authStore.user?.id
+        bookingPayload.approved_at = new Date().toISOString()
+      }
+
       const { data, error: insertError } = await supabase
         .from('facility_bookings')
-        .insert({
-          ...bookingData,
-          athlete_id: authStore.user?.id,
-          status: 'pending'
-        })
+        .insert(bookingPayload)
         .select()
         .single()
 
@@ -156,7 +182,11 @@ export const useFacilityStore = defineStore('facility', () => {
       // รีโหลด myBookings
       await fetchMyBookings()
 
-      return { success: true, data }
+      return { 
+        success: true, 
+        data,
+        message: isAdminOrCoach ? 'จองสำเร็จ (อนุมัติอัตโนมัติ)' : 'ส่งคำขอจองสำเร็จ รออนุมัติ'
+      }
     } catch (err) {
       error.value = err.message
       console.error('Error creating booking:', err)
@@ -168,6 +198,8 @@ export const useFacilityStore = defineStore('facility', () => {
 
   /**
    * สร้างการจองซ้ำ (recurring)
+   * - Admin/Coach: อนุมัติอัตโนมัติ (status = 'approved')
+   * - Athlete: รออนุมัติ (status = 'pending')
    */
   async function createRecurringBooking(bookingData, weeks) {
     loading.value = true
@@ -178,6 +210,10 @@ export const useFacilityStore = defineStore('facility', () => {
       const bookingsToCreate = []
       const conflicts = []
       const startDate = new Date(bookingData.booking_date)
+
+      // ตรวจสอบ role ของผู้ใช้
+      const userRole = authStore.profile?.role
+      const isAdminOrCoach = userRole === 'admin' || userRole === 'coach'
 
       for (let i = 0; i < weeks; i++) {
         const bookingDate = new Date(startDate)
@@ -193,13 +229,25 @@ export const useFacilityStore = defineStore('facility', () => {
         })
 
         if (isAvailable) {
-          bookingsToCreate.push({
-            ...bookingData,
+          // สร้าง payload เฉพาะ fields ที่มีใน database (ไม่รวม isRecurring, weeks)
+          const booking = {
+            facility_id: bookingData.facility_id,
             booking_date: dateStr,
+            start_time: bookingData.start_time,
+            end_time: bookingData.end_time,
+            purpose: bookingData.purpose || null,
             athlete_id: authStore.user?.id,
-            status: 'pending',
+            status: isAdminOrCoach ? 'approved' : 'pending',
             series_id: seriesId
-          })
+          }
+
+          // ถ้าเป็น Admin/Coach ให้บันทึกผู้อนุมัติด้วย
+          if (isAdminOrCoach) {
+            booking.approved_by = authStore.user?.id
+            booking.approved_at = new Date().toISOString()
+          }
+
+          bookingsToCreate.push(booking)
         } else {
           conflicts.push(dateStr)
         }
@@ -218,13 +266,16 @@ export const useFacilityStore = defineStore('facility', () => {
 
       await fetchMyBookings()
 
+      // สร้างข้อความตาม role
+      const statusText = isAdminOrCoach ? '(อนุมัติอัตโนมัติ)' : '(รออนุมัติ)'
+      
       return { 
         success: true, 
         data, 
         conflicts,
         message: conflicts.length > 0 
-          ? `สร้างการจอง ${data.length} รายการ (ข้าม ${conflicts.length} วันที่ถูกจองแล้ว)`
-          : `สร้างการจอง ${data.length} รายการ`
+          ? `สร้างการจอง ${data.length} รายการ ${statusText} (ข้าม ${conflicts.length} วันที่ถูกจองแล้ว)`
+          : `สร้างการจอง ${data.length} รายการ ${statusText}`
       }
     } catch (err) {
       error.value = err.message
@@ -423,7 +474,7 @@ export const useFacilityStore = defineStore('facility', () => {
         .from('facilities')
         .insert({
           ...facilityData,
-          club_id: authStore.userProfile?.club_id
+          club_id: authStore.profile?.club_id
         })
         .select()
         .single()

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useDataStore } from '@/stores/data'
@@ -9,6 +9,11 @@ import UpcomingScheduleBanner from '@/components/UpcomingScheduleBanner.vue'
 const router = useRouter()
 const auth = useAuthStore()
 const data = useDataStore()
+
+// จำนวนรายการสูงสุดที่แสดงต่อแถว
+const MAX_VISIBLE_ITEMS = 4
+// เก็บสถานะการขยายของแต่ละกลุ่ม
+const expandedGroups = ref({})
 
 const roleLabel = { admin: 'ผู้ดูแลระบบ', coach: 'โค้ช', athlete: 'นักกีฬา' }
 
@@ -74,6 +79,7 @@ const quickActionGroups = computed(() => {
           { icon: 'history', label: 'ประวัติแข่งขัน', to: '/tournament-history' },
           { icon: 'star', label: 'กิจกรรม', to: '/events' },
           { icon: 'calendar', label: 'ตารางนัดหมาย', to: '/schedules' },
+          { icon: 'facility', label: 'สถานที่', to: '/facilities' },
         ]
       },
       {
@@ -104,6 +110,7 @@ const quickActionGroups = computed(() => {
           { icon: 'trophy', label: 'ทัวร์นาเมนต์', to: '/tournaments' },
           { icon: 'star', label: 'กิจกรรม', to: '/events' },
           { icon: 'calendar', label: 'ตารางนัดหมาย', to: '/schedules' },
+          { icon: 'facility', label: 'สถานที่', to: '/facilities' },
           { icon: 'megaphone', label: 'ประกาศ', to: '/announcements' },
         ]
       },
@@ -127,6 +134,7 @@ const quickActionGroups = computed(() => {
         { icon: 'tracking', label: 'ติดตามความคืบหน้า', to: '/my-tracking' },
         { icon: 'clipboard', label: 'บันทึกฝึกซ้อม', to: '/training-logs' },
         { icon: 'calendar', label: 'ตารางนัดหมาย', to: '/schedules' },
+        { icon: 'facility', label: 'สถานที่', to: '/facilities' },
         { icon: 'trophy', label: 'ทัวร์นาเมนต์', to: '/tournaments' },
         { icon: 'star', label: 'กิจกรรม', to: '/events' },
         { icon: 'megaphone', label: 'ประกาศ', to: '/announcements' },
@@ -139,6 +147,24 @@ const quickActionGroups = computed(() => {
 const quickActions = computed(() => {
   return quickActionGroups.value.flatMap(group => group.actions)
 })
+
+// ฟังก์ชันดึง actions ที่จะแสดง (จำกัด 4 รายการ หรือทั้งหมดถ้าขยาย)
+const getVisibleActions = (groupIndex, actions) => {
+  if (expandedGroups.value[groupIndex]) {
+    return actions
+  }
+  return actions.slice(0, MAX_VISIBLE_ITEMS)
+}
+
+// ตรวจสอบว่ากลุ่มมีรายการเกิน 4 หรือไม่
+const hasMoreActions = (actions) => {
+  return actions.length > MAX_VISIBLE_ITEMS
+}
+
+// สลับสถานะขยาย/ยุบ
+const toggleGroup = (groupIndex) => {
+  expandedGroups.value[groupIndex] = !expandedGroups.value[groupIndex]
+}
 </script>
 
 <template>
@@ -199,9 +225,10 @@ const quickActions = computed(() => {
       <div v-for="(group, groupIndex) in quickActionGroups" :key="groupIndex" class="action-group">
         <div class="action-group-header">
           <span class="action-group-title">{{ group.title }}</span>
+          <span v-if="hasMoreActions(group.actions)" class="action-count">{{ group.actions.length }} รายการ</span>
         </div>
         <div class="quick-grid">
-          <button v-for="action in group.actions" :key="action.label" class="quick-btn" @click="router.push(action.to)">
+          <button v-for="action in getVisibleActions(groupIndex, group.actions)" :key="action.label" class="quick-btn" @click="router.push(action.to)">
             <span class="quick-icon">
               <svg v-if="action.icon === 'building'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5"/></svg>
               <svg v-else-if="action.icon === 'medal'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>
@@ -223,10 +250,28 @@ const quickActions = computed(() => {
               <svg v-else-if="action.icon === 'calculator'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="8" y2="10.01"/><line x1="12" y1="10" x2="12" y2="10.01"/><line x1="16" y1="10" x2="16" y2="10.01"/><line x1="8" y1="14" x2="8" y2="14.01"/><line x1="12" y1="14" x2="12" y2="14.01"/><line x1="16" y1="14" x2="16" y2="14.01"/><line x1="8" y1="18" x2="8" y2="18.01"/><line x1="12" y1="18" x2="12" y2="18.01"/><line x1="16" y1="18" x2="16" y2="18.01"/></svg>
               <svg v-else-if="action.icon === 'history'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
               <svg v-else-if="action.icon === 'album'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              <svg v-else-if="action.icon === 'facility'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
             </span>
             <span class="quick-label">{{ action.label }}</span>
           </button>
         </div>
+        <!-- ปุ่มเพิ่มเติม/ย่อ -->
+        <button 
+          v-if="hasMoreActions(group.actions)" 
+          class="expand-btn" 
+          @click="toggleGroup(groupIndex)"
+        >
+          <span>{{ expandedGroups[groupIndex] ? 'ย่อ' : 'เพิ่มเติม' }}</span>
+          <svg 
+            viewBox="0 0 24 24" 
+            fill="none" 
+            stroke="currentColor" 
+            stroke-width="2"
+            :class="{ 'rotate-180': expandedGroups[groupIndex] }"
+          >
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
       </div>
 
       <!-- Schedules -->
@@ -326,13 +371,55 @@ const quickActions = computed(() => {
 
 /* Action Groups */
 .action-group { margin-bottom: 20px; }
-.action-group-header { margin-bottom: 10px; }
+.action-group-header { 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center;
+  margin-bottom: 10px; 
+}
 .action-group-title { 
   font-size: 12px; 
   font-weight: 600; 
   color: var(--gray-500); 
   text-transform: uppercase; 
   letter-spacing: 0.05em;
+}
+.action-count {
+  font-size: 11px;
+  color: var(--gray-400);
+}
+
+/* ปุ่มเพิ่มเติม/ย่อ */
+.expand-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  padding: 10px;
+  margin-top: 8px;
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-md);
+  color: var(--gray-600);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.expand-btn:hover {
+  background: var(--gray-100);
+}
+.expand-btn:active {
+  background: var(--gray-200);
+}
+.expand-btn svg {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.2s;
+}
+.expand-btn svg.rotate-180 {
+  transform: rotate(180deg);
 }
 
 .quick-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }

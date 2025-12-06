@@ -42,9 +42,11 @@
             :class="getSlotClass(day.date, slot.time)"
             @click="handleSlotClick(day.date, slot)"
           >
-            <span v-if="getSlotBooking(day.date, slot.time)" class="slot-name">
-              {{ getSlotBooking(day.date, slot.time).athlete?.name || 'จองแล้ว' }}
-            </span>
+            <!-- แสดงสถานะชัดเจน -->
+            <span v-if="getSlotClass(day.date, slot.time) === 'available'" class="slot-status available-text">ว่าง</span>
+            <span v-else-if="getSlotClass(day.date, slot.time) === 'pending'" class="slot-status pending-text">รออนุมัติ</span>
+            <span v-else-if="getSlotClass(day.date, slot.time) === 'booked'" class="slot-status booked-text">จองแล้ว</span>
+            <span v-else-if="getSlotClass(day.date, slot.time) === 'past'" class="slot-status past-text">ผ่านแล้ว</span>
           </div>
         </div>
       </div>
@@ -351,37 +353,64 @@ defineExpose({
   transition: background 0.2s;
 }
 
+/* สถานะ: ว่าง - เขียวอ่อน */
 .slot-cell.available {
-  background: #fff;
+  background: #ECFDF5;
+  border: 1px solid #A7F3D0;
 }
 
 .slot-cell.available:hover {
-  background: #F0FDF4;
+  background: #D1FAE5;
+  border-color: #6EE7B7;
 }
 
+/* สถานะ: รออนุมัติ - เหลือง */
 .slot-cell.pending {
+  background: #FFFBEB;
+  border: 1px solid #FDE68A;
+}
+
+/* สถานะ: จองแล้ว - แดงอ่อน */
+.slot-cell.booked {
+  background: #FEF2F2;
+  border: 1px solid #FECACA;
+  cursor: default;
+}
+
+/* สถานะ: ไม่เปิดให้จอง / ผ่านแล้ว */
+.slot-cell.unavailable,
+.slot-cell.past {
+  background: #F9FAFB;
+  cursor: default;
+}
+
+/* ข้อความสถานะในช่อง */
+.slot-status {
+  font-size: 10px;
+  font-weight: 600;
+  text-align: center;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.slot-status.available-text {
+  color: #059669;
+  background: #D1FAE5;
+}
+
+.slot-status.pending-text {
+  color: #92400E;
   background: #FEF3C7;
 }
 
-.slot-cell.booked {
+.slot-status.booked-text {
+  color: #991B1B;
+  background: #FEE2E2;
+}
+
+.slot-status.past-text {
+  color: #6B7280;
   background: #F3F4F6;
-  cursor: default;
-}
-
-.slot-cell.unavailable,
-.slot-cell.past {
-  background: #FAFAFA;
-  cursor: default;
-}
-
-.slot-name {
-  font-size: 10px;
-  color: #525252;
-  text-align: center;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 100%;
 }
 
 .calendar-legend {

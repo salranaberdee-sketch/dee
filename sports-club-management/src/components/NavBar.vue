@@ -29,12 +29,11 @@ const userAvatarUrl = computed(() => auth.profile?.avatar_url || null)
 const userName = computed(() => auth.profile?.full_name || auth.profile?.email || '')
 
 // รายการเมนู Navigation ที่กรองตาม Role ของผู้ใช้
+// 4 เมนูหลัก (สถานที่เข้าถึงจาก Dashboard)
 const navItems = computed(() => {
   const items = [
     { to: '/', icon: 'home', label: 'หน้าหลัก', roles: ['admin', 'coach', 'athlete'] },
-    { to: '/events', icon: 'event', label: 'กิจกรรม', roles: ['admin', 'coach', 'athlete'] },
-    { to: '/facilities', icon: 'facility', label: 'สถานที่', roles: ['admin', 'coach', 'athlete'] },
-    { to: '/albums', icon: 'album', label: 'จัดการอัลบั้ม', roles: ['admin', 'coach'] },
+    { to: '/schedules', icon: 'calendar', label: 'นัดหมาย', roles: ['admin', 'coach', 'athlete'] },
     { to: '/notifications', icon: 'bell', label: 'แจ้งเตือน', roles: ['admin', 'coach', 'athlete'] },
     { to: '/profile', icon: 'user', label: 'โปรไฟล์', roles: ['admin', 'coach', 'athlete'] },
   ]
@@ -89,22 +88,10 @@ onUnmounted(() => {
           <polyline points="9 22 9 12 15 12 15 22"/>
         </svg>
         
-        <!-- Event Icon (Star/Trophy) -->
-        <svg v-else-if="item.icon === 'event'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-        </svg>
-        
-        <!-- Album Icon (Image Gallery) -->
-        <svg v-else-if="item.icon === 'album'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-          <circle cx="8.5" cy="8.5" r="1.5"/>
-          <polyline points="21 15 16 10 5 21"/>
-        </svg>
-        
-        <!-- Facility Icon (Building) -->
-        <svg v-else-if="item.icon === 'facility'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
-          <polyline points="9 22 9 12 15 12 15 22"/>
+        <!-- Calendar Icon (นัดหมาย) -->
+        <svg v-else-if="item.icon === 'calendar'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="4" width="18" height="18" rx="2"/>
+          <path d="M16 2v4M8 2v4M3 10h18"/>
         </svg>
         
         <!-- Notification Icon with Badge -->
